@@ -1,0 +1,1188 @@
+<title>שליח הזמנות</title>
+<meta name="theme-color" content="#16303F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Secular+One&display=swap">
+<style>
+/* required styles */
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	}
+.leaflet-container {
+	overflow: hidden;
+	}
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	-webkit-user-select: none;
+	   -moz-user-select: none;
+	        user-select: none;
+	  -webkit-user-drag: none;
+	}
+/* Prevents IE11 from highlighting tiles in blue */
+.leaflet-tile::selection {
+	background: transparent;
+}
+/* Safari renders non-retina tile on retina better with this, but Chrome is worse */
+.leaflet-safari .leaflet-tile {
+	image-rendering: -webkit-optimize-contrast;
+	}
+/* hack that prevents hw layers "stretching" when loading new tiles */
+.leaflet-safari .leaflet-tile-container {
+	width: 1600px;
+	height: 1600px;
+	-webkit-transform-origin: 0 0;
+	}
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	display: block;
+	}
+/* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */
+/* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */
+.leaflet-container .leaflet-overlay-pane svg {
+	max-width: none !important;
+	max-height: none !important;
+	}
+.leaflet-container .leaflet-marker-pane img,
+.leaflet-container .leaflet-shadow-pane img,
+.leaflet-container .leaflet-tile-pane img,
+.leaflet-container img.leaflet-image-layer,
+.leaflet-container .leaflet-tile {
+	max-width: none !important;
+	max-height: none !important;
+	width: auto;
+	padding: 0;
+	}
+
+.leaflet-container img.leaflet-tile {
+	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
+	mix-blend-mode: plus-lighter;
+}
+
+.leaflet-container.leaflet-touch-zoom {
+	-ms-touch-action: pan-x pan-y;
+	touch-action: pan-x pan-y;
+	}
+.leaflet-container.leaflet-touch-drag {
+	-ms-touch-action: pinch-zoom;
+	/* Fallback for FF which doesn't support pinch-zoom */
+	touch-action: none;
+	touch-action: pinch-zoom;
+}
+.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+	-ms-touch-action: none;
+	touch-action: none;
+}
+.leaflet-container {
+	-webkit-tap-highlight-color: transparent;
+}
+.leaflet-container a {
+	-webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+}
+.leaflet-tile {
+	filter: inherit;
+	visibility: hidden;
+	}
+.leaflet-tile-loaded {
+	visibility: inherit;
+	}
+.leaflet-zoom-box {
+	width: 0;
+	height: 0;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	z-index: 800;
+	}
+/* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
+.leaflet-overlay-pane svg {
+	-moz-user-select: none;
+	}
+
+.leaflet-pane         { z-index: 400; }
+
+.leaflet-tile-pane    { z-index: 200; }
+.leaflet-overlay-pane { z-index: 400; }
+.leaflet-shadow-pane  { z-index: 500; }
+.leaflet-marker-pane  { z-index: 600; }
+.leaflet-tooltip-pane   { z-index: 650; }
+.leaflet-popup-pane   { z-index: 700; }
+
+.leaflet-map-pane canvas { z-index: 100; }
+.leaflet-map-pane svg    { z-index: 200; }
+
+.leaflet-vml-shape {
+	width: 1px;
+	height: 1px;
+	}
+.lvml {
+	behavior: url(#default#VML);
+	display: inline-block;
+	position: absolute;
+	}
+
+
+/* control positioning */
+
+.leaflet-control {
+	position: relative;
+	z-index: 800;
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+.leaflet-top,
+.leaflet-bottom {
+	position: absolute;
+	z-index: 1000;
+	pointer-events: none;
+	}
+.leaflet-top {
+	top: 0;
+	}
+.leaflet-right {
+	right: 0;
+	}
+.leaflet-bottom {
+	bottom: 0;
+	}
+.leaflet-left {
+	left: 0;
+	}
+.leaflet-control {
+	float: left;
+	clear: both;
+	}
+.leaflet-right .leaflet-control {
+	float: right;
+	}
+.leaflet-top .leaflet-control {
+	margin-top: 10px;
+	}
+.leaflet-bottom .leaflet-control {
+	margin-bottom: 10px;
+	}
+.leaflet-left .leaflet-control {
+	margin-left: 10px;
+	}
+.leaflet-right .leaflet-control {
+	margin-right: 10px;
+	}
+
+
+/* zoom and fade animations */
+
+.leaflet-fade-anim .leaflet-popup {
+	opacity: 0;
+	-webkit-transition: opacity 0.2s linear;
+	   -moz-transition: opacity 0.2s linear;
+	        transition: opacity 0.2s linear;
+	}
+.leaflet-fade-anim .leaflet-map-pane .leaflet-popup {
+	opacity: 1;
+	}
+.leaflet-zoom-animated {
+	-webkit-transform-origin: 0 0;
+	    -ms-transform-origin: 0 0;
+	        transform-origin: 0 0;
+	}
+svg.leaflet-zoom-animated {
+	will-change: transform;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+	-webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1);
+	   -moz-transition:    -moz-transform 0.25s cubic-bezier(0,0,0.25,1);
+	        transition:         transform 0.25s cubic-bezier(0,0,0.25,1);
+	}
+.leaflet-zoom-anim .leaflet-tile,
+.leaflet-pan-anim .leaflet-tile {
+	-webkit-transition: none;
+	   -moz-transition: none;
+	        transition: none;
+	}
+
+.leaflet-zoom-anim .leaflet-zoom-hide {
+	visibility: hidden;
+	}
+
+
+/* cursors */
+
+.leaflet-interactive {
+	cursor: pointer;
+	}
+.leaflet-grab {
+	cursor: -webkit-grab;
+	cursor:    -moz-grab;
+	cursor:         grab;
+	}
+.leaflet-crosshair,
+.leaflet-crosshair .leaflet-interactive {
+	cursor: crosshair;
+	}
+.leaflet-popup-pane,
+.leaflet-control {
+	cursor: auto;
+	}
+.leaflet-dragging .leaflet-grab,
+.leaflet-dragging .leaflet-grab .leaflet-interactive,
+.leaflet-dragging .leaflet-marker-draggable {
+	cursor: move;
+	cursor: -webkit-grabbing;
+	cursor:    -moz-grabbing;
+	cursor:         grabbing;
+	}
+
+/* marker & overlays interactivity */
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-image-layer,
+.leaflet-pane > svg path,
+.leaflet-tile-container {
+	pointer-events: none;
+	}
+
+.leaflet-marker-icon.leaflet-interactive,
+.leaflet-image-layer.leaflet-interactive,
+.leaflet-pane > svg path.leaflet-interactive,
+svg.leaflet-image-layer.leaflet-interactive path {
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+
+/* visual tweaks */
+
+.leaflet-container {
+	background: #ddd;
+	outline-offset: 1px;
+	}
+.leaflet-container a {
+	color: #0078A8;
+	}
+.leaflet-zoom-box {
+	border: 2px dotted #38f;
+	background: rgba(255,255,255,0.5);
+	}
+
+
+/* general typography */
+.leaflet-container {
+	font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	}
+
+
+/* general toolbar styles */
+
+.leaflet-bar {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+	border-radius: 4px;
+	}
+.leaflet-bar a {
+	background-color: #fff;
+	border-bottom: 1px solid #ccc;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: block;
+	text-align: center;
+	text-decoration: none;
+	color: black;
+	}
+.leaflet-bar a,
+.leaflet-control-layers-toggle {
+	background-position: 50% 50%;
+	background-repeat: no-repeat;
+	display: block;
+	}
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+	background-color: #f4f4f4;
+	}
+.leaflet-bar a:first-child {
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	}
+.leaflet-bar a:last-child {
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+	border-bottom: none;
+	}
+.leaflet-bar a.leaflet-disabled {
+	cursor: default;
+	background-color: #f4f4f4;
+	color: #bbb;
+	}
+
+.leaflet-touch .leaflet-bar a {
+	width: 30px;
+	height: 30px;
+	line-height: 30px;
+	}
+.leaflet-touch .leaflet-bar a:first-child {
+	border-top-left-radius: 2px;
+	border-top-right-radius: 2px;
+	}
+.leaflet-touch .leaflet-bar a:last-child {
+	border-bottom-left-radius: 2px;
+	border-bottom-right-radius: 2px;
+	}
+
+/* zoom control */
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+	font: bold 18px 'Lucida Console', Monaco, monospace;
+	text-indent: 1px;
+	}
+
+.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out  {
+	font-size: 22px;
+	}
+
+
+/* layers control */
+
+.leaflet-control-layers {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+	background: #fff;
+	border-radius: 5px;
+	}
+.leaflet-control-layers-toggle {
+	background-image: url(images/layers.png);
+	width: 36px;
+	height: 36px;
+	}
+.leaflet-retina .leaflet-control-layers-toggle {
+	background-image: url(images/layers-2x.png);
+	background-size: 26px 26px;
+	}
+.leaflet-touch .leaflet-control-layers-toggle {
+	width: 44px;
+	height: 44px;
+	}
+.leaflet-control-layers .leaflet-control-layers-list,
+.leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+	display: none;
+	}
+.leaflet-control-layers-expanded .leaflet-control-layers-list {
+	display: block;
+	position: relative;
+	}
+.leaflet-control-layers-expanded {
+	padding: 6px 10px 6px 6px;
+	color: #333;
+	background: #fff;
+	}
+.leaflet-control-layers-scrollbar {
+	overflow-y: scroll;
+	overflow-x: hidden;
+	padding-right: 5px;
+	}
+.leaflet-control-layers-selector {
+	margin-top: 2px;
+	position: relative;
+	top: 1px;
+	}
+.leaflet-control-layers label {
+	display: block;
+	font-size: 13px;
+	font-size: 1.08333em;
+	}
+.leaflet-control-layers-separator {
+	height: 0;
+	border-top: 1px solid #ddd;
+	margin: 5px -10px 5px -6px;
+	}
+
+/* Default icon URLs */
+.leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */
+	background-image: url(images/marker-icon.png);
+	}
+
+
+/* attribution and scale controls */
+
+.leaflet-container .leaflet-control-attribution {
+	background: #fff;
+	background: rgba(255, 255, 255, 0.8);
+	margin: 0;
+	}
+.leaflet-control-attribution,
+.leaflet-control-scale-line {
+	padding: 0 5px;
+	color: #333;
+	line-height: 1.4;
+	}
+.leaflet-control-attribution a {
+	text-decoration: none;
+	}
+.leaflet-control-attribution a:hover,
+.leaflet-control-attribution a:focus {
+	text-decoration: underline;
+	}
+.leaflet-attribution-flag {
+	display: inline !important;
+	vertical-align: baseline !important;
+	width: 1em;
+	height: 0.6669em;
+	}
+.leaflet-left .leaflet-control-scale {
+	margin-left: 5px;
+	}
+.leaflet-bottom .leaflet-control-scale {
+	margin-bottom: 5px;
+	}
+.leaflet-control-scale-line {
+	border: 2px solid #777;
+	border-top: none;
+	line-height: 1.1;
+	padding: 2px 5px 1px;
+	white-space: nowrap;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.8);
+	text-shadow: 1px 1px #fff;
+	}
+.leaflet-control-scale-line:not(:first-child) {
+	border-top: 2px solid #777;
+	border-bottom: none;
+	margin-top: -2px;
+	}
+.leaflet-control-scale-line:not(:first-child):not(:last-child) {
+	border-bottom: 2px solid #777;
+	}
+
+.leaflet-touch .leaflet-control-attribution,
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	box-shadow: none;
+	}
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	border: 2px solid rgba(0,0,0,0.2);
+	background-clip: padding-box;
+	}
+
+
+/* popup */
+
+.leaflet-popup {
+	position: absolute;
+	text-align: center;
+	margin-bottom: 20px;
+	}
+.leaflet-popup-content-wrapper {
+	padding: 1px;
+	text-align: left;
+	border-radius: 12px;
+	}
+.leaflet-popup-content {
+	margin: 13px 24px 13px 20px;
+	line-height: 1.3;
+	font-size: 13px;
+	font-size: 1.08333em;
+	min-height: 1px;
+	}
+.leaflet-popup-content p {
+	margin: 17px 0;
+	margin: 1.3em 0;
+	}
+.leaflet-popup-tip-container {
+	width: 40px;
+	height: 20px;
+	position: absolute;
+	left: 50%;
+	margin-top: -1px;
+	margin-left: -20px;
+	overflow: hidden;
+	pointer-events: none;
+	}
+.leaflet-popup-tip {
+	width: 17px;
+	height: 17px;
+	padding: 1px;
+
+	margin: -10px auto 0;
+	pointer-events: auto;
+
+	-webkit-transform: rotate(45deg);
+	   -moz-transform: rotate(45deg);
+	    -ms-transform: rotate(45deg);
+	        transform: rotate(45deg);
+	}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+	background: white;
+	color: #333;
+	box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+	}
+.leaflet-container a.leaflet-popup-close-button {
+	position: absolute;
+	top: 0;
+	right: 0;
+	border: none;
+	text-align: center;
+	width: 24px;
+	height: 24px;
+	font: 16px/24px Tahoma, Verdana, sans-serif;
+	color: #757575;
+	text-decoration: none;
+	background: transparent;
+	}
+.leaflet-container a.leaflet-popup-close-button:hover,
+.leaflet-container a.leaflet-popup-close-button:focus {
+	color: #585858;
+	}
+.leaflet-popup-scrolled {
+	overflow: auto;
+	}
+
+.leaflet-oldie .leaflet-popup-content-wrapper {
+	-ms-zoom: 1;
+	}
+.leaflet-oldie .leaflet-popup-tip {
+	width: 24px;
+	margin: 0 auto;
+
+	-ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
+	filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
+	}
+
+.leaflet-oldie .leaflet-control-zoom,
+.leaflet-oldie .leaflet-control-layers,
+.leaflet-oldie .leaflet-popup-content-wrapper,
+.leaflet-oldie .leaflet-popup-tip {
+	border: 1px solid #999;
+	}
+
+
+/* div icon */
+
+.leaflet-div-icon {
+	background: #fff;
+	border: 1px solid #666;
+	}
+
+
+/* Tooltip */
+/* Base styles for the element that has a tooltip */
+.leaflet-tooltip {
+	position: absolute;
+	padding: 6px;
+	background-color: #fff;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #222;
+	white-space: nowrap;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	pointer-events: none;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+	}
+.leaflet-tooltip.leaflet-interactive {
+	cursor: pointer;
+	pointer-events: auto;
+	}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	position: absolute;
+	pointer-events: none;
+	border: 6px solid transparent;
+	background: transparent;
+	content: "";
+	}
+
+/* Directions */
+
+.leaflet-tooltip-bottom {
+	margin-top: 6px;
+}
+.leaflet-tooltip-top {
+	margin-top: -6px;
+}
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-top:before {
+	left: 50%;
+	margin-left: -6px;
+	}
+.leaflet-tooltip-top:before {
+	bottom: 0;
+	margin-bottom: -12px;
+	border-top-color: #fff;
+	}
+.leaflet-tooltip-bottom:before {
+	top: 0;
+	margin-top: -12px;
+	margin-left: -6px;
+	border-bottom-color: #fff;
+	}
+.leaflet-tooltip-left {
+	margin-left: -6px;
+}
+.leaflet-tooltip-right {
+	margin-left: 6px;
+}
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	top: 50%;
+	margin-top: -6px;
+	}
+.leaflet-tooltip-left:before {
+	right: 0;
+	margin-right: -12px;
+	border-left-color: #fff;
+	}
+.leaflet-tooltip-right:before {
+	left: 0;
+	margin-left: -12px;
+	border-right-color: #fff;
+	}
+
+/* Printing */
+
+@media print {
+	/* Prevent printers from removing background-images of controls. */
+	.leaflet-control {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+		}
+	}
+
+:root{
+  --ground:#EEF1F0; --surface:#FFFFFF; --surface-2:#F5F7F6; --ink:#13222B; --ink-2:#4A5A63; --ink-3:#7C8B92;
+  --line:#DCE2E0; --brand:#16303F; --brand-ink:#FFFFFF; --gold:#B8862B; --gold-soft:#F4E9D2;
+  --ok:#1D8A55; --ok-soft:#DDF2E6; --retry:#C27A12; --retry-soft:#FBEBD0; --fail:#C23B34; --fail-soft:#F8DEDC;
+  --pending-soft:#E6ECEF; --shadow:0 1px 2px rgba(19,34,43,.06),0 6px 20px rgba(19,34,43,.07);
+  --map-bg:#E4E9E6; --map-grid:rgba(22,48,63,.07);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ground:#0D1519; --surface:#152128; --surface-2:#1B2931; --ink:#E9EFF1; --ink-2:#A9B7BE; --ink-3:#7D8D95;
+    --line:#26363F; --brand:#0A1318; --brand-ink:#F2F5F6; --gold:#D8A94F; --gold-soft:#3A2F1B;
+    --ok:#34B874; --ok-soft:#153526; --retry:#E3A13C; --retry-soft:#3A2B14; --fail:#EA6A62; --fail-soft:#3D1D1B;
+    --pending-soft:#22313A; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25);
+    --map-bg:#111C22; --map-grid:rgba(233,239,241,.05);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0D1519; --surface:#152128; --surface-2:#1B2931; --ink:#E9EFF1; --ink-2:#A9B7BE; --ink-3:#7D8D95;
+  --line:#26363F; --brand:#0A1318; --brand-ink:#F2F5F6; --gold:#D8A94F; --gold-soft:#3A2F1B;
+  --ok:#34B874; --ok-soft:#153526; --retry:#E3A13C; --retry-soft:#3A2B14; --fail:#EA6A62; --fail-soft:#3D1D1B;
+  --pending-soft:#22313A; --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.25);
+  --map-bg:#111C22; --map-grid:rgba(233,239,241,.05);
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font-family:"Rubik",system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+button:focus-visible,a:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+#root{height:100%}
+.app{height:100%;display:flex;flex-direction:column;max-width:560px;margin-inline:auto;position:relative;background:var(--ground)}
+
+/* header */
+.top{background:var(--brand);color:var(--brand-ink);padding:14px 16px 16px;display:flex;flex-direction:column;gap:14px}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.task-label{font-size:12px;letter-spacing:.06em;opacity:.7}
+.task-no{font-family:"Secular One","Rubik",sans-serif;font-size:26px;line-height:1.1;letter-spacing:.01em}
+.task-no span{color:var(--gold)}
+.task-sub{font-size:13px;opacity:.8;margin-top:2px}
+.icon-btn{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.1)}
+.icon-btn svg{width:20px;height:20px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:rgba(255,255,255,.08);border-radius:12px;padding:8px 6px 7px;text-align:center}
+.stat b{display:block;font-family:"Secular One","Rubik",sans-serif;font-size:22px;line-height:1.15;font-weight:400}
+.stat small{font-size:11.5px;opacity:.78}
+.stat.ok b{color:#6FE0A2}.stat.fail b{color:#FF9C95}.stat.retry b{color:#FFC76A}
+.progress{height:6px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden;display:flex}
+.progress i{display:block;height:100%}
+.progress-txt{display:flex;justify-content:space-between;font-size:12px;opacity:.8;margin-top:-6px}
+
+/* body */
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 16px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border-radius:20px;box-shadow:var(--shadow);padding:16px;display:flex;flex-direction:column;gap:14px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.eyebrow{font-size:12px;letter-spacing:.05em;color:var(--ink-3);font-weight:500}
+.stepper{display:flex;gap:6px}
+.stepper button{width:40px;height:40px;border-radius:12px;background:var(--surface-2);display:grid;place-items:center;border:1px solid var(--line)}
+.stepper button:disabled{opacity:.35}
+.stepper svg{width:18px;height:18px}
+.who{display:flex;gap:12px;align-items:flex-start}
+.seq{flex:none;width:44px;height:44px;border-radius:14px;background:var(--gold-soft);color:var(--gold);display:grid;place-items:center;font-family:"Secular One","Rubik",sans-serif;font-size:20px}
+.name{font-size:24px;font-weight:700;line-height:1.2;text-wrap:balance}
+.addr{font-size:15px;color:var(--ink-2);margin-top:3px}
+.hint{display:flex;gap:10px;align-items:flex-start;background:var(--surface-2);border-radius:14px;padding:11px 12px;font-size:15px;line-height:1.45}
+.hint svg{flex:none;width:18px;height:18px;margin-top:2px;color:var(--gold)}
+.status-line{font-size:13.5px;border-radius:10px;padding:8px 10px;font-weight:500}
+.status-line.retry{background:var(--retry-soft);color:var(--retry)}
+.status-line.fail{background:var(--fail-soft);color:var(--fail)}
+.status-line.ok{background:var(--ok-soft);color:var(--ok)}
+.actions{display:grid;grid-template-columns:1fr 1.6fr;gap:10px}
+.btn{height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:18px;font-weight:600;text-decoration:none;transition:transform .08s}
+.btn:active{transform:scale(.97)}
+.btn svg{width:22px;height:22px}
+.btn-nav{background:var(--surface-2);border:1.5px solid var(--line);color:var(--ink)}
+.btn-done{background:var(--ok);color:#fff;font-size:21px;box-shadow:0 6px 16px rgba(29,138,85,.28)}
+.btn-fail{height:48px;border-radius:14px;border:1.5px solid var(--line);color:var(--fail);font-size:16px;font-weight:500;width:100%}
+.btn-undo-status{height:44px;border-radius:12px;background:var(--surface-2);font-size:15px;color:var(--ink-2);width:100%}
+
+.alldone{text-align:center;padding:28px 16px;align-items:center}
+.alldone .big{font-family:"Secular One","Rubik",sans-serif;font-size:26px}
+.alldone p{margin:0;color:var(--ink-2);line-height:1.5}
+.alldone .check{width:64px;height:64px;border-radius:50%;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center}
+
+/* list */
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.list-head h2{margin:0;font-size:17px;font-weight:600}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:36px;padding:0 14px;border-radius:18px;background:var(--surface);border:1px solid var(--line);font-size:14px;color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+:root[data-theme="dark"] .chip[aria-pressed="true"]{background:var(--gold);color:#1a1409;border-color:var(--gold)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chip[aria-pressed="true"]{background:var(--gold);color:#1a1409;border-color:var(--gold)}}
+.rows{display:flex;flex-direction:column;background:var(--surface);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:start;width:100%;border-bottom:1px solid var(--line);min-height:68px}
+.row:last-child{border-bottom:0}
+.row.current{background:var(--gold-soft)}
+.row-seq{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:600;background:var(--pending-soft);color:var(--ink-2)}
+.row-seq.delivered{background:var(--ok);color:#fff}.row-seq.retry{background:var(--retry);color:#fff}.row-seq.failed{background:var(--fail);color:#fff}
+.row-main{flex:1;min-width:0}
+.row-name{font-weight:600;font-size:16px}
+.row-sub{font-size:13px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{flex:none;font-size:12px;font-weight:500;padding:4px 9px;border-radius:10px;white-space:nowrap}
+.pill.pending{background:var(--pending-soft);color:var(--ink-2)}
+.pill.delivered{background:var(--ok-soft);color:var(--ok)}
+.pill.retry{background:var(--retry-soft);color:var(--retry)}
+.pill.failed{background:var(--fail-soft);color:var(--fail)}
+.empty{padding:22px;text-align:center;color:var(--ink-3)}
+
+/* tabbar */
+.tabbar{display:grid;grid-template-columns:1fr 1fr;background:var(--surface);border-top:1px solid var(--line);padding:6px 16px calc(6px + env(safe-area-inset-bottom,0px));gap:8px}
+.tab{height:52px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--ink-3)}
+.tab svg{width:22px;height:22px}
+.tab[aria-selected="true"]{color:var(--ink);background:var(--surface-2);font-weight:600}
+
+/* map */
+.mapwrap{flex:1;position:relative;display:flex;flex-direction:column;min-height:0}
+#map{flex:1;min-height:0;background-color:var(--map-bg);background-image:linear-gradient(var(--map-grid) 1px,transparent 1px),linear-gradient(90deg,var(--map-grid) 1px,transparent 1px);background-size:32px 32px}
+.leaflet-container{font-family:inherit}
+.map-note{position:absolute;top:10px;inset-inline:16px;z-index:500;background:var(--surface);color:var(--ink-2);font-size:12px;padding:7px 10px;border-radius:10px;box-shadow:var(--shadow);text-align:center}
+.fit-btn{position:absolute;z-index:500;inset-inline-start:16px;bottom:12px;height:40px;padding:0 12px;border-radius:12px;background:var(--surface);box-shadow:var(--shadow);font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.fit-btn svg{width:16px;height:16px}
+.mapsheet{background:var(--surface);border-radius:20px 20px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.12);padding:14px 16px 14px;display:flex;flex-direction:column;gap:12px;position:relative;z-index:600}
+.mapsheet .name{font-size:20px}
+.mapsheet .btn{height:58px}
+.pin{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font:600 13px "Rubik",sans-serif;color:#fff;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);background:#5B6B73}
+.pin.delivered{background:#1D8A55}.pin.retry{background:#C27A12}.pin.failed{background:#C23B34}
+.pin.current{width:40px;height:40px;font-size:16px;background:#16303F;border-color:#D8A94F;border-width:3px;box-shadow:0 0 0 6px rgba(216,169,79,.35),0 3px 8px rgba(0,0,0,.4)}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(8,14,18,.5);z-index:2000;display:flex;align-items:flex-end;justify-content:center;animation:fade .15s}
+.sheet{background:var(--surface);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:10px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:10px;animation:up .2s ease-out;max-height:90%;overflow-y:auto}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);align-self:center;margin-bottom:4px}
+.sheet h3{margin:0 0 2px;font-size:19px}
+.sheet .sub{margin:0 0 4px;color:var(--ink-3);font-size:14px}
+.reason{height:60px;border-radius:14px;border:1.5px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px;font-size:17px;font-weight:500;text-align:start}
+.reason svg{width:22px;height:22px;flex:none}
+.reason .tag{margin-inline-start:auto;font-size:12px;font-weight:500;padding:3px 8px;border-radius:8px}
+.reason .tag.retry{background:var(--retry-soft);color:var(--retry)}
+.reason .tag.failed{background:var(--fail-soft);color:var(--fail)}
+.reason.sel{border-color:var(--ink)}
+textarea{font:inherit;font-size:16px;width:100%;min-height:84px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface-2);color:var(--ink);padding:12px}
+.sheet .btn-primary{height:56px;border-radius:14px;background:var(--brand);color:var(--brand-ink);font-size:17px;font-weight:600}
+.sheet .btn-ghost{height:48px;border-radius:14px;color:var(--ink-2);font-size:16px}
+.menu-item{height:54px;border-radius:14px;background:var(--surface-2);display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:16px}
+.seg{display:flex;background:var(--surface-2);border-radius:12px;padding:3px;gap:3px}
+.seg button{height:38px;padding:0 14px;border-radius:10px;font-size:14px;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:var(--shadow)}
+.foot-note{font-size:12.5px;color:var(--ink-3);line-height:1.5;margin:4px 2px 0}
+
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:1500;background:#13222B;color:#fff;border-radius:14px;padding:6px 6px 6px 16px;display:flex;align-items:center;gap:12px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.3);width:calc(100% - 32px);max-width:528px;animation:up .2s ease-out}
+.toast span{flex:1;padding-inline-start:10px}
+.toast button{height:42px;padding:0 16px;border-radius:10px;background:rgba(255,255,255,.12);color:#FFD27A;font-weight:600}
+@keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
+.toast{animation-name:toastup}
+@keyframes toastup{from{transform:translate(-50%,24px);opacity:.4}to{transform:translate(-50%,0);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pop{0%{transform:scale(.96)}60%{transform:scale(1.02)}100%{transform:none}}
+.pop{animation:pop .28s ease-out}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div id="root" dir="rtl" lang="he"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+const html = htm.bind(React.createElement);
+
+/* ---------- נתוני דמה: משימה אחת שהמנהל הקצה לשליח ---------- */
+const TASK = {
+  id: "1042",
+  event: "חתונת סאמר ורים",
+  eventDate: "חמישי, 8.10",
+  courier: "וסים",
+};
+const DEMO = [
+  { id:"g1",  first:"יוסף",   last:"חדאד",   area:"השכונה המזרחית", address:"רח' הזיתים 14",   desc:"בית עם שער ירוק, מול המכולת של אבו סמיר", lat:32.70195, lng:35.29810 },
+  { id:"g2",  first:"מרים",   last:"חורי",    area:"השכונה המזרחית", address:"רח' הזיתים 22",   desc:"קומה שנייה, מדרגות מצד שמאל של הבית", lat:32.70260, lng:35.29905 },
+  { id:"g3",  first:"ג'ורג'", last:"נסאר",   area:"השכונה המזרחית", address:"סמטת הגפן 3",     desc:"בית אבן ישן בסוף הסמטה, עץ לימון בחצר", lat:32.70335, lng:35.29990 },
+  { id:"g4",  first:"סלמא",  last:"עודה",    area:"מרכז הכפר",      address:"כיכר המעיין",      desc:"מעל המאפייה, כניסה מהצד האחורי", lat:32.70120, lng:35.30095 },
+  { id:"g5",  first:"אחמד",   last:"דיאב",    area:"מרכז הכפר",      address:"רח' הכנסייה 7",   desc:"ליד בית הספר היסודי, בית לבן עם מרפסת קשתות", lat:32.70045, lng:35.30170 },
+  { id:"g6",  first:"נאדיה",  last:"סלים",    area:"מרכז הכפר",      address:"רח' הכנסייה 19",  desc:"שער חום, יש כלב קשור בחצר — לצלצל בפעמון", lat:32.69980, lng:35.30240 },
+  { id:"g7",  first:"חליל",   last:"מנסור",  area:"השכונה הדרומית", address:"דרך הכרמים 5",    desc:"בית ראשון אחרי תחנת האוטובוס, צד ימין", lat:32.69865, lng:35.30190 },
+  { id:"g8",  first:"רנא",    last:"עבוד",    area:"השכונה הדרומית", address:"דרך הכרמים 12",   desc:"בית עם חניה מקורה ורכב כסוף", lat:32.69790, lng:35.30110 },
+  { id:"g9",  first:"פאדי",   last:"שחאדה",  area:"השכונה הדרומית", address:"דרך הכרמים 31",   desc:"בית חדש בבנייה ליד, הכניסה מהשביל", lat:32.69715, lng:35.30020 },
+  { id:"g10", first:"סועאד", last:"בשארה",  area:"השכונה המערבית", address:"רח' האלון 2",     desc:"צמוד למגרש הכדורגל, דלת כחולה", lat:32.69830, lng:35.29890 },
+  { id:"g11", first:"אליאס", last:"זריק",    area:"השכונה המערבית", address:"רח' האלון 9",     desc:"בית בקומה, להשאיר אצל האמא בקומת הקרקע", lat:32.69905, lng:35.29790 },
+  { id:"g12", first:"הנאא",   last:"קעואר",  area:"השכונה המערבית", address:"רח' האלון 17",    desc:"מול המסגד הקטן, שער ברזל שחור", lat:32.69990, lng:35.29700 },
+  { id:"g13", first:"באסל",   last:"טנוס",    area:"השכונה הצפונית", address:"דרך המצפה 4",     desc:"בית אחרון בעלייה, נוף לעמק", lat:32.70115, lng:35.29640 },
+  { id:"g14", first:"לילא",   last:"חביב",    area:"השכונה הצפונית", address:"דרך המצפה 11",    desc:"בית ורוד, פעמון ליד תיבת הדואר", lat:32.70220, lng:35.29700 },
+].map((g,i)=>({ ...g, seq:i+1, status:"pending", reason:null, note:"", at:null }));
+
+const REASONS = [
+  { key:"not_home",  label:"לא היה בבית",   status:"retry",  icon:"home" },
+  { key:"bad_addr",  label:"כתובת לא נכונה", status:"failed", icon:"pinx" },
+  { key:"return",    label:"צריך לחזור",     status:"retry",  icon:"clock" },
+  { key:"other",     label:"אחר",            status:"failed", icon:"dots" },
+];
+const REASON_LABEL = Object.fromEntries(REASONS.map(r=>[r.key,r.label]));
+const STATUS_LABEL = { pending:"ממתין", delivered:"נמסר", retry:"לחזור", failed:"לא נמסר" };
+
+/* ---------- אחסון מקומי (לנוחות בלבד) ---------- */
+const KEY = "invites-courier-task-1042-v1";
+function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && Array.isArray(s.items) && s.items.length===DEMO.length) return s; }catch(e){} return null; }
+function save(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){} }
+function wipe(){ try{ localStorage.removeItem(KEY); }catch(e){} }
+
+/* היעד הבא: קודם ממתינים לפי סדר המסלול, אחר כך מי שצריך לחזור אליו */
+function nextId(items, fromSeq){
+  const pend = items.filter(i=>i.status==="pending");
+  const after = pend.find(i=>i.seq>fromSeq);
+  if(after) return after.id;
+  if(pend.length) return pend[0].id;
+  const retry = items.filter(i=>i.status==="retry");
+  const rAfter = retry.find(i=>i.seq>fromSeq);
+  if(rAfter) return rAfter.id;
+  return retry.length ? retry[0].id : null;
+}
+const hhmm = t => t ? new Date(t).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"}) : "";
+
+/* ---------- אייקונים ---------- */
+const P = {
+  nav:"M3 11l18-8-8 18-2-8-8-2z",
+  check:"M5 12.5l4.5 4.5L19 7.5",
+  x:"M6 6l12 12M18 6L6 18",
+  list:"M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01",
+  map:"M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4zM9 4v13.5M15 6.5V20",
+  prev:"M9 6l6 6-6 6",
+  next:"M15 6l-6 6 6 6",
+  home:"M4 11l8-7 8 7v9h-5v-6H9v6H4z",
+  pinx:"M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21zM9.8 7.3l4.4 4.4M14.2 7.3l-4.4 4.4",
+  clock:"M12 7v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  dots:"M5 12h.01M12 12h.01M19 12h.01",
+  menu:"M4 7h16M4 12h16M4 17h16",
+  info:"M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21zM12 10.5a2 2 0 100-4 2 2 0 000 4z",
+  fit:"M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  undo:"M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3",
+};
+const Icon = ({n,w=2}) => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width=${w} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${P[n]} /></svg>`;
+
+const navUrl = (app,g) => app==="waze"
+  ? `https://waze.com/ul?ll=${g.lat},${g.lng}&navigate=yes`
+  : `https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lng}`;
+
+/* ---------- מסך ראשי: היעד הנוכחי ---------- */
+function CurrentCard({ g, total, navApp, onDone, onFail, onReset, onStep, canPrev, canNext, compact }){
+  if(!g) return null;
+  const st = g.status;
+  return html`
+    <section className=${(compact?"":"card ")+"pop"} key=${g.id} style=${compact?{display:"flex",flexDirection:"column",gap:"12px"}:null} aria-label="היעד הנוכחי">
+      <div className="card-head">
+        <span className="eyebrow num">יעד ${g.seq} מתוך ${total} · ${g.area}</span>
+        <div className="stepper">
+          <button onClick=${()=>onStep(-1)} disabled=${!canPrev} aria-label="היעד הקודם"><${Icon} n="prev"/></button>
+          <button onClick=${()=>onStep(1)} disabled=${!canNext} aria-label="היעד הבא"><${Icon} n="next"/></button>
+        </div>
+      </div>
+      <div className="who">
+        ${!compact && html`<div className="seq num">${g.seq}</div>`}
+        <div>
+          <div className="name">${g.first} ${g.last}</div>
+          <div className="addr">${g.address}</div>
+        </div>
+      </div>
+      ${!compact && html`<div className="hint"><${Icon} n="info"/><span>${g.desc}</span></div>`}
+      ${st==="delivered" && html`<div className="status-line ok">נמסר בשעה ${hhmm(g.at)}</div>`}
+      ${st==="retry" && html`<div className="status-line retry">ניסיון קודם: ${REASON_LABEL[g.reason]}${g.note?` — ${g.note}`:""} (${hhmm(g.at)})</div>`}
+      ${st==="failed" && html`<div className="status-line fail">לא נמסר: ${REASON_LABEL[g.reason]}${g.note?` — ${g.note}`:""}</div>`}
+      ${st==="delivered" || st==="failed" ? html`
+        <div className="actions">
+          <a className="btn btn-nav" href=${navUrl(navApp,g)} target="_blank" rel="noopener"><${Icon} n="nav"/>נווט</a>
+          <button className="btn-undo-status btn" style=${{height:"64px"}} onClick=${onReset}><${Icon} n="undo"/>החזר לממתין</button>
+        </div>` : html`
+        <div className="actions">
+          <a className="btn btn-nav" href=${navUrl(navApp,g)} target="_blank" rel="noopener"><${Icon} n="nav"/>נווט</a>
+          <button className="btn btn-done" onClick=${onDone}><${Icon} n="check" w=${2.6}/>נמסר</button>
+        </div>
+        <button className="btn-fail" onClick=${onFail}>לא נמסר</button>`}
+    </section>`;
+}
+
+function AllDone({ counts, onRestartView }){
+  return html`
+    <section className="card alldone pop">
+      <div className="check"><${Icon} n="check" w=${2.6}/></div>
+      <div className="big">המשימה הושלמה</div>
+      <p className="num">${counts.delivered} נמסרו · ${counts.failed} לא נמסרו.<br/>אין יעדים שממתינים או שצריך לחזור אליהם.</p>
+    </section>`;
+}
+
+/* ---------- רשימת המוזמנים ---------- */
+function GuestList({ items, currentId, onPick }){
+  const [f,setF] = useState("all");
+  const filters = [["all","הכל"],["pending","ממתינים"],["retry","לחזור"],["delivered","נמסרו"],["failed","לא נמסרו"]];
+  const shown = f==="all" ? items : items.filter(i=>i.status===f);
+  return html`
+    <section style=${{display:"flex",flexDirection:"column",gap:"10px"}}>
+      <div className="list-head"><h2>המוזמנים שלי</h2><span className="eyebrow num">${items.length} בסך הכל</span></div>
+      <div className="chips" role="group" aria-label="סינון">
+        ${filters.map(([k,l])=>{
+          const c = k==="all"?items.length:items.filter(i=>i.status===k).length;
+          return html`<button key=${k} className="chip num" aria-pressed=${f===k} onClick=${()=>setF(k)}>${l} ${c}</button>`;})}
+      </div>
+      <div className="rows">
+        ${shown.length===0 && html`<div className="empty">אין מוזמנים בקטגוריה הזו</div>`}
+        ${shown.map(g=>html`
+          <button key=${g.id} className=${"row"+(g.id===currentId?" current":"")} onClick=${()=>onPick(g.id)}>
+            <span className=${"row-seq num "+g.status}>${g.status==="delivered"?"✓":g.seq}</span>
+            <span className="row-main">
+              <div className="row-name">${g.first} ${g.last}</div>
+              <div className="row-sub">${g.address} · ${g.area}</div>
+            </span>
+            <span className=${"pill "+g.status}>${g.status==="delivered"?hhmm(g.at):STATUS_LABEL[g.status]}</span>
+          </button>`)}
+      </div>
+    </section>`;
+}
+
+/* ---------- מפה: רק נקודות המשימה הנוכחית ---------- */
+function MapView({ items, current, active, onPick, children }){
+  const box = useRef(null), mapRef = useRef(null), layer = useRef(null), routeRef = useRef(null);
+  const [tilesOk,setTilesOk] = useState(null);
+
+  useEffect(()=>{
+    const map = L.map(box.current,{ zoomControl:false, attributionControl:true });
+    mapRef.current = map;
+    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{ maxZoom:19, attribution:"© OpenStreetMap" });
+    let loaded=false, errors=0;
+    tiles.on("tileload",()=>{ loaded=true; setTilesOk(true); });
+    tiles.on("tileerror",()=>{ errors++; });
+    tiles.addTo(map);
+    setTimeout(()=>{ if(!loaded){ map.removeLayer(tiles); setTilesOk(false); } }, 3500);
+    layer.current = L.layerGroup().addTo(map);
+    map.fitBounds(L.latLngBounds(items.map(i=>[i.lat,i.lng])).pad(0.18));
+    return ()=>map.remove();
+  },[]);
+
+  useEffect(()=>{
+    const map = mapRef.current; if(!map) return;
+    layer.current.clearLayers();
+    if(routeRef.current) map.removeLayer(routeRef.current);
+    routeRef.current = L.polyline(items.map(i=>[i.lat,i.lng]),{ color:"#B8862B", weight:3, opacity:.55, dashArray:"6 8" }).addTo(map);
+    items.forEach(g=>{
+      const isCur = current && g.id===current.id;
+      const icon = L.divIcon({ className:"", html:`<div class="pin ${g.status} ${isCur?"current":""}">${g.status==="delivered"?"✓":g.seq}</div>`, iconSize:isCur?[40,40]:[30,30], iconAnchor:isCur?[20,20]:[15,15] });
+      L.marker([g.lat,g.lng],{ icon, zIndexOffset: isCur?1000:0, keyboard:true, title:`${g.first} ${g.last}` }).on("click",()=>onPick(g.id)).addTo(layer.current);
+    });
+  },[items,current]);
+
+  useEffect(()=>{
+    const map = mapRef.current; if(!map || !active) return;
+    setTimeout(()=>{ map.invalidateSize(); if(current) map.panTo([current.lat,current.lng],{animate:true}); },60);
+  },[active,current && current.id]);
+
+  const fit = ()=> mapRef.current.fitBounds(L.latLngBounds(items.map(i=>[i.lat,i.lng])).pad(0.18));
+
+  return html`
+    <div className="mapwrap">
+      <div id="map" ref=${box} dir="ltr"></div>
+      ${tilesOk===false && html`<div className="map-note">מצב הדגמה: שכבת הרחובות של OpenStreetMap נטענת כשהאפליקציה רצה על שרת רגיל</div>`}
+      <button className="fit-btn" onClick=${fit}><${Icon} n="fit"/>כל הנקודות</button>
+    </div>
+    <div className="mapsheet">${children}</div>`;
+}
+
+/* ---------- חלונית "לא נמסר" ---------- */
+function FailSheet({ g, onClose, onSubmit }){
+  const [sel,setSel] = useState(null), [note,setNote] = useState("");
+  const pick = r => { if(r.key==="other"){ setSel(r); } else { onSubmit(r, ""); } };
+  return html`
+    <div className="scrim" onClick=${e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="סיבת אי מסירה">
+        <div className="grab"></div>
+        <h3>למה לא נמסר?</h3>
+        <p className="sub">${g.first} ${g.last} · ${g.address}</p>
+        ${REASONS.map(r=>html`
+          <button key=${r.key} className=${"reason"+(sel&&sel.key===r.key?" sel":"")} onClick=${()=>pick(r)}>
+            <${Icon} n=${r.icon}/>${r.label}
+            <span className=${"tag "+r.status}>${r.status==="retry"?"נחזור אליו":"יסומן כלא נמסר"}</span>
+          </button>`)}
+        ${sel && html`
+          <textarea id="other-note" placeholder="מה קרה? (לא חובה)" value=${note} onChange=${e=>setNote(e.target.value)} autoFocus></textarea>
+          <button className="btn-primary" onClick=${()=>onSubmit(sel,note.trim())}>שמור</button>`}
+        <button className="btn-ghost" onClick=${onClose}>ביטול</button>
+      </div>
+    </div>`;
+}
+
+function MenuSheet({ navApp, setNavApp, onClose, onReset }){
+  const [confirm,setConfirm] = useState(false);
+  return html`
+    <div className="scrim" onClick=${e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="הגדרות">
+        <div className="grab"></div>
+        <h3>הגדרות</h3>
+        <div className="menu-item"><span>אפליקציית ניווט</span>
+          <div className="seg">
+            <button aria-pressed=${navApp==="waze"} onClick=${()=>setNavApp("waze")}>Waze</button>
+            <button aria-pressed=${navApp==="google"} onClick=${()=>setNavApp("google")}>Google Maps</button>
+          </div>
+        </div>
+        ${!confirm ? html`<button className="menu-item" onClick=${()=>setConfirm(true)}><span>איפוס נתוני הדמה</span></button>`
+          : html`<button className="menu-item" style=${{color:"var(--fail)",fontWeight:600}} onClick=${onReset}><span>לחץ שוב לאישור — כל הסטטוסים יתאפסו</span></button>`}
+        <p className="foot-note">גרסת הדגמה עם נתוני דמה. השליח רואה רק את ${DEMO.length} המוזמנים שהוקצו לו במשימה #${TASK.id}.</p>
+        <button className="btn-ghost" onClick=${onClose}>סגור</button>
+      </div>
+    </div>`;
+}
+
+/* ---------- האפליקציה ---------- */
+function App(){
+  const saved = useMemo(load,[]);
+  const [items,setItems] = useState(saved ? saved.items : DEMO);
+  const [currentId,setCurrentId] = useState(saved ? saved.currentId : DEMO[0].id);
+  const [navApp,setNavApp] = useState(saved && saved.navApp || "waze");
+  const [tab,setTab] = useState("list");
+  const [failOpen,setFailOpen] = useState(false);
+  const [menuOpen,setMenuOpen] = useState(false);
+  const [toast,setToast] = useState(null);
+  const toastTimer = useRef(null), scrollRef = useRef(null);
+
+  useEffect(()=>save({items,currentId,navApp}),[items,currentId,navApp]);
+  useEffect(()=>{ // שומר את המסך דלוק בזמן עבודה, אם הדפדפן מאפשר
+    let lock=null; const req=()=>{ try{ navigator.wakeLock && navigator.wakeLock.request("screen").then(l=>lock=l).catch(()=>{}); }catch(e){} };
+    document.addEventListener("click",req,{once:true});
+    return ()=>{ try{ lock && lock.release(); }catch(e){} };
+  },[]);
+
+  const counts = useMemo(()=>{
+    const c={total:items.length,delivered:0,failed:0,retry:0,pending:0};
+    items.forEach(i=>c[i.status]++); return c;
+  },[items]);
+  const current = items.find(i=>i.id===currentId) || null;
+  const idx = current ? items.indexOf(current) : -1;
+  const openLeft = counts.pending + counts.retry;
+
+  const showToast = (msg, undo) => {
+    clearTimeout(toastTimer.current);
+    setToast({msg,undo});
+    toastTimer.current = setTimeout(()=>setToast(null), 5000);
+  };
+
+  const update = (id, patch, msg) => {
+    const prevItems = items, prevCur = currentId;
+    const next = items.map(i=>i.id===id?{...i,...patch,at:Date.now()}:i);
+    setItems(next);
+    const g = items.find(i=>i.id===id);
+    setCurrentId(nextId(next, g.seq) || id);
+    if(scrollRef.current) scrollRef.current.scrollTo({top:0,behavior:"smooth"});
+    showToast(msg, ()=>{ setItems(prevItems); setCurrentId(prevCur); setToast(null); });
+  };
+
+  const markDone = () => update(current.id,{status:"delivered",reason:null,note:""},`${current.first} ${current.last} — נמסר ✓`);
+  const markFail = (r,note) => { setFailOpen(false); update(current.id,{status:r.status,reason:r.key,note},`${current.first} ${current.last} — ${r.label}`); };
+  const resetOne = () => setItems(items.map(i=>i.id===current.id?{...i,status:"pending",reason:null,note:"",at:null}:i));
+  const step = d => { const n = items[idx+d]; if(n) setCurrentId(n.id); };
+  const pick = id => { setCurrentId(id); if(tab==="list" && scrollRef.current) scrollRef.current.scrollTo({top:0,behavior:"smooth"}); };
+  const resetAll = () => { wipe(); setItems(DEMO); setCurrentId(DEMO[0].id); setMenuOpen(false); };
+
+  const done = openLeft===0;
+  const card = (compact) => done && !compact ? html`<${AllDone} counts=${counts}/>` : html`<${CurrentCard} g=${current} total=${items.length} navApp=${navApp} compact=${compact}
+      onDone=${markDone} onFail=${()=>setFailOpen(true)} onReset=${resetOne} onStep=${step} canPrev=${idx>0} canNext=${idx<items.length-1}/>`;
+
+  const pct = k => (counts[k]/counts.total*100)+"%";
+
+  return html`
+    <div className="app">
+      <header className="top">
+        <div className="top-row">
+          <div>
+            <div className="task-label">משימת חלוקה</div>
+            <div className="task-no num"><span>#</span>${TASK.id}</div>
+            <div className="task-sub">${TASK.event} · ${TASK.eventDate}</div>
+          </div>
+          <button className="icon-btn" onClick=${()=>setMenuOpen(true)} aria-label="הגדרות"><${Icon} n="menu"/></button>
+        </div>
+        <div className="stats num">
+          <div className="stat"><b>${counts.total}</b><small>סה״כ</small></div>
+          <div className="stat ok"><b>${counts.delivered}</b><small>נמסרו</small></div>
+          <div className="stat fail"><b>${counts.failed}</b><small>לא נמסרו</small></div>
+          <div className="stat retry"><b>${counts.retry}</b><small>לחזור</small></div>
+        </div>
+        <div className="progress" aria-hidden="true">
+          <i style=${{width:pct("delivered"),background:"#34B874"}}></i>
+          <i style=${{width:pct("retry"),background:"#E3A13C"}}></i>
+          <i style=${{width:pct("failed"),background:"#EA6A62"}}></i>
+        </div>
+        <div className="progress-txt num"><span>נותרו ${counts.pending} ממתינים</span><span>${Math.round(counts.delivered/counts.total*100)}% נמסרו</span></div>
+      </header>
+
+      <main style=${{flex:1,minHeight:0,display:tab==="list"?"flex":"none",flexDirection:"column"}}>
+        <div className="scroll" ref=${scrollRef}>
+          ${card(false)}
+          <${GuestList} items=${items} currentId=${currentId} onPick=${pick}/>
+        </div>
+      </main>
+      <main style=${{flex:1,minHeight:0,display:tab==="map"?"flex":"none",flexDirection:"column"}}>
+        <${MapView} items=${items} current=${current} active=${tab==="map"} onPick=${setCurrentId}>
+          ${done ? html`<div style=${{textAlign:"center",padding:"8px",fontWeight:600}}>המשימה הושלמה · ${counts.delivered} נמסרו</div>` : card(true)}
+        <//>
+      </main>
+
+      <nav className="tabbar" role="tablist">
+        <button className="tab" role="tab" aria-selected=${tab==="list"} onClick=${()=>setTab("list")}><${Icon} n="list"/>משימה</button>
+        <button className="tab" role="tab" aria-selected=${tab==="map"} onClick=${()=>setTab("map")}><${Icon} n="map"/>מפה</button>
+      </nav>
+
+      ${toast && html`<div className="toast" role="status"><span>${toast.msg}</span><button onClick=${toast.undo}>ביטול</button></div>`}
+      ${failOpen && current && html`<${FailSheet} g=${current} onClose=${()=>setFailOpen(false)} onSubmit=${markFail}/>`}
+      ${menuOpen && html`<${MenuSheet} navApp=${navApp} setNavApp=${setNavApp} onClose=${()=>setMenuOpen(false)} onReset=${resetAll}/>`}
+    </div>`;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(html`<${App}/>`);
+</script>
