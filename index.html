@@ -1318,6 +1318,22 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
   .hlist{inset-inline-end:auto;width:420px;inset-inline-start:12px;bottom:12px;border-radius:18px}
   .hm-bottom{inset-inline-end:auto;inset-inline-start:12px;width:420px}
 }
+/* base toggle (map / aerial) */
+.hm-base{position:absolute;z-index:5;top:72px;inset-inline-start:12px;box-shadow:var(--shadow-2);background:var(--surface)}
+.hm-base button{height:40px;padding:0 12px;font-size:14px}
+.hm-base button svg{width:17px;height:17px}
+.hmap.base-img .hm-count{background:rgba(255,255,255,.95);color:#23313A}
+.hmap.base-img .hm-cross span{border-color:#FFD34D;box-shadow:0 0 0 3px rgba(0,0,0,.55),0 0 0 9999px rgba(0,0,0,.06)}
+.hmap.base-img .hm-cross span::after{background:#FFD34D}
+.hmap.base-img .hlabel{border-color:#FFFFFF;background:rgba(14,27,36,.82);color:#fff}
+.hmap.base-img .hlabel.check{border-color:#FFB23E}
+.steps-list{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px;line-height:1.55}
+.steps-list a{color:var(--accent)}
+.hmap .maplibregl-ctrl-bottom-right,.hmap .maplibregl-ctrl-bottom-left{bottom:84px}
+.hmap .maplibregl-ctrl-attrib{background:rgba(255,255,255,.85)}
+.hmap .maplibregl-ctrl-bottom-right,.hmap .maplibregl-ctrl-bottom-left{bottom:80px}
+.hm-gps{bottom:128px}
+.adm:has(.main.flush) .a-toast{bottom:auto;top:calc(186px + env(safe-area-inset-top,0px))}
 
 </style>
 <div id="root" dir="rtl" lang="he"></div>
@@ -1732,7 +1748,8 @@ const P = {
   walk: "M13.5 5.5a1.75 1.75 0 100-3.5 1.75 1.75 0 000 3.5zM9 21l2.5-7 3 2.5V21M7 11.5l2-4 4.5 1 2 3.5 3 1",
   target: "M12 2v3M12 19v3M2 12h3M19 12h3M12 18a6 6 0 100-12 6 6 0 000 12zM12 13.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
   mail: "M3.5 6.5h17v11h-17zM4 7l8 6 8-6",
-  more: "M12 5h.01M12 12h.01M12 19h.01", refresh: "M20 11a8 8 0 10-2.3 5.7M20 5v6h-6",
+  more: "M12 5h.01M12 12h.01M12 19h.01",
+  photo: "M3.5 5.5h17v13h-17zM3.5 15.5l5-5 4.5 4.5 3-3 4.5 4.5M15.5 9.5h.01", refresh: "M20 11a8 8 0 10-2.3 5.7M20 5v6h-6",
 };
 const Icon = ({ n, w = 2 }) => html`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width=${w} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${P[n]} /></svg>`;
 
@@ -2149,6 +2166,25 @@ const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const ML_JS = "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js";
 const RTL_URL = "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js";
 const VIEW_KEY = "dispatch-houses-view";
+/* תצלום אוויר: Esri World Imagery דרך ArcGIS Location Platform (מפתח API אישי, 2M אריחים בחודש חינם).
+   אריחי 512px, סדר {z}/{y}/{x}. התצלום הוא רק רקע — שום מידע לא נשלח לשירות המפות. */
+const IMG_KEY = "dispatch-esri-key", BASE_KEY = "dispatch-houses-base";
+const IMG_URL = key => `https://static-map-tiles-api.arcgis.com/arcgis/rest/services/static-basemap-tiles-service/v1/arcgis/imagery/static/tile/{z}/{y}/{x}?token=${encodeURIComponent(key)}`;
+const IMG_ATTR = "Powered by Esri · Imagery: Esri, Maxar, Earthstar Geographics";
+const lsGet = k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } };
+const lsSet = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { } };
+const styleBuildingLayers = map => (map.getStyle().layers || []).filter(l => !/^(my-|sel-|esri-)/.test(l.id) && (l["source-layer"] === "building" || /building/i.test(l.id))).map(l => l.id);
+function applyBase(map, base, key) {
+  if (map.getLayer("esri-img")) map.removeLayer("esri-img");
+  if (map.getSource("esri-img")) map.removeSource("esri-img");
+  const img = base === "img" && !!key;
+  if (img) {
+    map.addSource("esri-img", { type: "raster", tiles: [IMG_URL(key)], tileSize: 512, maxzoom: 19, attribution: IMG_ATTR });
+    const firstLabel = (map.getStyle().layers || []).find(l => l.type === "symbol" && !/^(my-|sel-)/.test(l.id));
+    map.addLayer({ id: "esri-img", type: "raster", source: "esri-img", paint: { "raster-fade-duration": 120 } }, firstLabel ? firstLabel.id : "my-fill");
+  }
+  styleBuildingLayers(map).forEach(id => { try { map.setLayoutProperty(id, "visibility", img ? "none" : "visible"); } catch (e) { } });
+}
 const HOUSE_STATUS = { verified: { label: "מאומת", color: "#2563D9" }, check: { label: "לבדיקה", color: "#D98200" } };
 
 let REAL_MAP = null;
@@ -2252,6 +2288,27 @@ function FamilyForm({ form, setForm, onSave, onDelete, saving, error }) {
   <//>`;
 }
 
+function ImageryKeyModal({ current, onSave, onClose, failed }) {
+  const [key, setKey] = useState(current || ""), [err, setErr] = useState(null);
+  const save = () => { const k = key.trim(); if (k.length < 20) { setErr("המפתח קצר מדי. העתק את כל ה-API key."); return; } onSave(k); };
+  const foot = html`<div className="info">המפתח נשמר רק במכשיר הזה</div>
+    <div className="btns"><button className="b b-sec" onClick=${onClose}>ביטול</button><button className="b b-primary" onClick=${save}>שמור והצג תצלום</button></div>`;
+  return html`<${Modal} size="sm" title="חיבור תצלומי אוויר" sub="Esri World Imagery" onClose=${onClose} foot=${foot}>
+    <div className="form">
+      ${failed && html`<div className="banner warn"><${Icon} n="alert"/><span className="grow">השירות לא החזיר תמונות עם המפתח הנוכחי. בדוק שהעתקת אותו במלואו ושיש לו הרשאת Basemaps.</span></div>`}
+      <p style=${{ margin: 0, lineHeight: 1.6 }}>התצלום מגיע מ-Esri (ArcGIS). צריך מפתח אישי חינמי, פעם אחת בכל מכשיר. בחינם עד 2 מיליון אריחים בחודש, הרבה יותר ממה שנדרש למיפוי כפר.</p>
+      <ol className="steps-list">
+        <li>פתח חשבון חינמי ב-<a href="https://location.arcgis.com/" target="_blank" rel="noopener">location.arcgis.com</a></li>
+        <li>צור API key עם הרשאת <b>Basemaps</b>. מומלץ להגביל אותו לכתובת האתר שלך ב-GitHub.</li>
+        <li>הדבק אותו כאן</li>
+      </ol>
+      <div className="f"><label for="img-key">API key</label><textarea id="img-key" dir="ltr" rows="3" autoComplete="off" value=${key} onChange=${e => { setKey(e.target.value); setErr(null); }}></textarea></div>
+      ${err && html`<div className="err">${err}</div>`}
+      ${current && html`<button className="b b-ghost" onClick=${() => onSave("")}>מחק את המפתח מהמכשיר</button>`}
+    </div>
+  <//>`;
+}
+
 function HouseMap({ people, stops, tasks }) {
   const box = useRef(null), mapRef = useRef(null), geoRef = useRef(null), labelsRef = useRef([]);
   const housesRef = useRef([]), modeRef = useRef("browse"), clickRef = useRef(null), openRef = useRef(null), renderLabelsRef = useRef(() => { });
@@ -2267,6 +2324,11 @@ function HouseMap({ people, stops, tasks }) {
   const [q, setQ] = useState(""), [qFocus, setQFocus] = useState(false);
   const [listOpen, setListOpen] = useState(false), [listF, setListF] = useState("all");
   const [locating, setLocating] = useState(false);
+  const [base, setBaseS] = useState(() => lsGet(BASE_KEY) === "img" && lsGet(IMG_KEY) ? "img" : "map");
+  const [imgKey, setImgKey] = useState(() => lsGet(IMG_KEY));
+  const [keyModal, setKeyModal] = useState(false), [imgFailed, setImgFailed] = useState(false);
+  const imgRef = useRef({ ok: false, errs: 0 });
+  const setBase = b => { if (b === "img" && !imgKey) { setKeyModal(true); return; } setBaseS(b); lsSet(BASE_KEY, b); };
 
   /* ---- יצירת המפה ---- */
   useEffect(() => {
@@ -2289,7 +2351,11 @@ function HouseMap({ people, stops, tasks }) {
     geo.on("geolocate", () => setLocating(false));
     geo.on("error", () => { setLocating(false); toast("לא התקבל מיקום. בדוק שהרשאת המיקום בדפדפן פעילה.", "error"); });
     let loaded = false;
-    map.on("error", e => console.warn("map", e && e.error && e.error.message));
+    map.on("error", e => {
+      if (e && e.sourceId === "esri-img") { const s = imgRef.current; s.errs++; if (s.errs === 1) setTimeout(() => { if (imgRef.current === s && !s.ok) setImgFailed(true); }, 2500); return; }
+      console.warn("map", e && e.error && e.error.message);
+    });
+    map.on("sourcedata", e => { if (e.sourceId === "esri-img" && e.tile) { imgRef.current.ok = true; } });
     const loadTimer = setTimeout(() => { if (!loaded) setMapErr("המפה לא נטענה. בדוק את החיבור לאינטרנט ונסה שוב."); }, 20000);
 
     const renderLabels = () => {
@@ -2315,10 +2381,11 @@ function HouseMap({ people, stops, tasks }) {
       map.addLayer({ id: "my-line", type: "line", source: "my-polys", paint: { "line-color": col, "line-width": 2 } });
       map.addLayer({ id: "sel-fill", type: "fill", source: "sel", paint: { "fill-color": "#0E1B24", "fill-opacity": 0.14 } });
       map.addLayer({ id: "sel-line", type: "line", source: "sel", paint: { "line-color": "#0E1B24", "line-width": 3 } });
-      const vis = ["case", ["get", "hasFoot"], ["step", ["zoom"], 1, 16.5, 0], 1];
+      const vis = ["step", ["zoom"], 1, 16.5, ["case", ["get", "hasFoot"], 0, 1]];
       map.addLayer({ id: "my-dot", type: "circle", source: "my-pts", paint: {
         "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 16, 6, 19, 10], "circle-color": col,
         "circle-stroke-color": "#ffffff", "circle-stroke-width": 2, "circle-opacity": vis, "circle-stroke-opacity": vis } });
+      if (!map.getLayer("my-dot")) console.error("my-dot layer missing");
       setReady(true);
     });
     map.on("click", e => clickRef.current && clickRef.current(e));
@@ -2338,6 +2405,18 @@ function HouseMap({ people, stops, tasks }) {
     map.getSource("my-pts").setData(fc(houses.map(h => ({ type: "Feature", properties: { key: h.key, status: h.status, hasFoot: !!h.ring }, geometry: { type: "Point", coordinates: [h.lng, h.lat] } }))));
     renderLabelsRef.current();
   }, [ready, houses]);
+
+  useEffect(() => {
+    const map = mapRef.current; if (!ready || !map) return;
+    imgRef.current = { ok: false, errs: 0 };
+    try { applyBase(map, base, imgKey); } catch (e) { console.warn(e); }
+  }, [ready, base, imgKey]);
+  useEffect(() => { if (imgFailed && base === "img") { setBaseS("map"); lsSet(BASE_KEY, "map"); setKeyModal(true); } }, [imgFailed]);
+  const saveKey = k => { lsSet(IMG_KEY, k); setImgKey(k); setKeyModal(false); setImgFailed(false); if (k) { setBaseS("img"); lsSet(BASE_KEY, "img"); } else { setBaseS("map"); lsSet(BASE_KEY, "map"); } };
+  const baseToggle = html`<div className="seg hm-base" role="group" aria-label="שכבת רקע">
+    <button aria-pressed=${base === "map"} onClick=${() => setBase("map")}><${Icon} n="map"/>מפה</button>
+    <button aria-pressed=${base === "img"} onClick=${() => setBase("img")}><${Icon} n="photo"/>תצלום אוויר</button>
+  </div>`;
 
   const selHouse = sel && sel.kind === "house" ? houses.find(h => h.key === sel.key) : null;
   useEffect(() => { if (sel && sel.kind === "house" && !selHouse) setSel(null); }, [selHouse, sel]);
@@ -2449,18 +2528,19 @@ function HouseMap({ people, stops, tasks }) {
   const checkCount = houses.filter(h => h.status === "check").length;
 
   if (mapErr) return html`<div className="page" style=${{ padding: "16px" }}><div className="banner warn"><${Icon} n="alert"/><span className="grow">${mapErr}</span></div></div>`;
-  return html`<div className="hmap">
+  return html`<div className=${"hmap base-" + base}>
     <div ref=${box} className="hmap-canvas" dir="ltr"></div>
     ${!ready && html`<div className="hm-loading">טוען מפה…</div>`}
 
     ${mode === "add" ? html`
       <div className="hm-cross" aria-hidden="true"><span></span></div>
-      <div className="hm-top"><div className="hm-hint">${moveKey ? "הזז את המפה עד שהסמן על המיקום החדש של הבית" : "הזז את המפה עד שהסמן על הבית, ואז לחץ \"כאן\""}</div></div>
+      <div className="hm-top"><div className="hm-hint">${moveKey ? "הזז את המפה עד שהסמן על המיקום החדש, ואז \"שמור כאן\"" : "הזז את המפה עד שהסמן על הבית, ואז \"שמור כאן\""}</div></div>
+      ${baseToggle}
       <div className="hm-bar">
         <button className="b b-sec b-lg" onClick=${() => { setMode("browse"); setMoveKey(null); }}>ביטול</button>
-        <button className="b b-primary b-lg" onClick=${confirmAdd}><${Icon} n="pin"/>כאן</button>
+        <button className="b b-primary b-lg" onClick=${confirmAdd}><${Icon} n="pin"/>שמור כאן</button>
       </div>
-      <button className="hm-gps" onClick=${locate} aria-label="המיקום שלי" style=${{ bottom: "96px" }}><${Icon} n="target"/></button>` : html`
+      <button className="hm-gps" onClick=${locate} aria-label="המיקום שלי"><${Icon} n="target"/></button>` : html`
       <div className="hm-top">
         <div className="hm-search">
           <${Icon} n="search"/>
@@ -2469,6 +2549,7 @@ function HouseMap({ people, stops, tasks }) {
         </div>
         <button className=${"hm-sq" + (listOpen ? " on" : "")} onClick=${() => { setListOpen(v => !v); setSel(null); }} aria-label="רשימת בתים"><${Icon} n="list"/></button>
       </div>
+      ${!(qFocus && q) && !listOpen && baseToggle}
       ${qFocus && q && html`<div className="hm-results">
         ${results.length === 0 && html`<div className="empty">לא נמצאה משפחה</div>`}
         ${results.map(p => html`<button key=${p.id} className="prow" onMouseDown=${e => e.preventDefault()} onClick=${() => { setQ(""); openHouse(p.houseKey || p.id, true); }}>
@@ -2520,6 +2601,7 @@ function HouseMap({ people, stops, tasks }) {
       </div>
     </div>`}
 
+    ${keyModal && html`<${ImageryKeyModal} current=${imgKey} failed=${imgFailed} onSave=${saveKey} onClose=${() => setKeyModal(false)}/>`}
     ${form && html`<${FamilyForm} form=${form} setForm=${setForm} onSave=${saveForm} onDelete=${!form.isNew ? deleteFamily : null} saving=${saving} error=${formErr}/>`}
   </div>`;
 }
