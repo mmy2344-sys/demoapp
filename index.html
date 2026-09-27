@@ -1334,6 +1334,18 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
 .hmap .maplibregl-ctrl-bottom-right,.hmap .maplibregl-ctrl-bottom-left{bottom:80px}
 .hm-gps{bottom:128px}
 .adm:has(.main.flush) .a-toast{bottom:auto;top:calc(186px + env(safe-area-inset-top,0px))}
+/* map controls: compass, zoom, GPS */
+.hm-ctrls{position:absolute;z-index:5;inset-inline-start:12px;bottom:126px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.hm-btn{width:52px;height:52px;border-radius:50%;background:var(--surface);box-shadow:var(--shadow-2);display:grid;place-items:center;color:var(--ink)}
+.hm-btn svg{width:26px;height:26px}
+.hm-btn.gps{color:var(--accent)}
+.hm-zoom{display:flex;flex-direction:column;background:var(--surface);border-radius:16px;box-shadow:var(--shadow-2);overflow:hidden}
+.hm-zoom button{width:52px;height:52px;display:grid;place-items:center;color:var(--ink)}
+.hm-zoom button + button{border-top:1px solid var(--line)}
+.hm-zoom button:active,.hm-btn:active{background:var(--surface-2)}
+.hm-zoom svg{width:22px;height:22px}
+.hmap .maplibregl-canvas{touch-action:none}
+.hm-top,.hm-base,.hm-ctrls,.hm-bottom,.hm-bar{touch-action:manipulation}
 
 </style>
 <div id="root" dir="rtl" lang="he"></div>
@@ -1376,7 +1388,7 @@ const fullName = p => `${p.firstName} ${p.lastName}`;
 const WEEKDAY = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const dayName = d => { try { const [y, m, dd] = d.split("-"); return WEEKDAY[new Date(+y, +m - 1, +dd).getDay()]; } catch (e) { return ""; } };
 const VILLAGE_CENTER = { lat: 32.7, lng: 35.3 };
-const BUILD_ID = "27.9b · תצלום אוויר מתוקן";
+const BUILD_ID = "27.9c · שליטה מלאה במפה";
 
 /* ---------- 2. store ----------
    ממשק אחיד: watch(collection, where, cb) / set / update / remove / reset
@@ -1733,7 +1745,8 @@ const P = {
   menu: "M4 7h16M4 12h16M4 17h16",
   pin: "M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21zM12 10.5a2 2 0 100-4 2 2 0 000 4z",
   fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5", undo: "M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3",
-  plus: "M12 5v14M5 12h14", search: "M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4",
+  plus: "M12 5v14M5 12h14",
+  minus: "M5 12h14", search: "M11 18a7 7 0 100-14 7 7 0 000 14zM20 20l-4-4",
   dash: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z",
   users: "M9 11a4 4 0 100-8 4 4 0 000 8zM2 21v-1a6 6 0 016-6h2a6 6 0 016 6v1M16 3.5a4 4 0 010 7.5M22 21v-1a6 6 0 00-4-5.6",
   back: "M9 6l6 6-6 6", trash: "M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3",
@@ -2339,6 +2352,7 @@ function HouseMap({ people, stops, tasks }) {
   const [ready, setReady] = useState(false);
   const [mapErr, setMapErr] = useState(null);
   const [sel, setSel] = useState(null);
+  const selRef = useRef(null); selRef.current = sel;
   const [mode, setMode] = useState("browse"); modeRef.current = mode;
   const [moveKey, setMoveKey] = useState(null);
   const [form, setForm] = useState(null);
@@ -2346,8 +2360,10 @@ function HouseMap({ people, stops, tasks }) {
   const [q, setQ] = useState(""), [qFocus, setQFocus] = useState(false);
   const [listOpen, setListOpen] = useState(false), [listF, setListF] = useState("all");
   const [locating, setLocating] = useState(false);
+  const [bearing, setBearing] = useState(0);
   const [base, setBaseS] = useState(() => lsGet(BASE_KEY) === "img" && lsGet(IMG_KEY) ? "img" : "map");
   const [imgKey, setImgKey] = useState(() => lsGet(IMG_KEY));
+  const baseRef = useRef(base); baseRef.current = base;
   const [keyModal, setKeyModal] = useState(false), [imgFailed, setImgFailed] = useState(false);
   const imgRef = useRef({ ok: false, errs: 0 });
   const setBase = b => { if (b === "img" && !imgKey) { setKeyModal(true); return; } setBaseS(b); lsSet(BASE_KEY, b); };
@@ -2364,12 +2380,17 @@ function HouseMap({ people, stops, tasks }) {
     try {
       map = new maplibregl.Map({
         container: box.current, style: STYLE_URL, center: [start.lng, start.lat], zoom: view && view.zoom ? view.zoom : 16.5,
-        maxZoom: 20, attributionControl: { compact: true }, dragRotate: false, pitchWithRotate: false, touchPitch: false,
+        bearing: view && view.bearing ? view.bearing : 0,
+        /* מחוות חופשיות: צביטה, גרירה, סיבוב בשתי אצבעות, הקשה כפולה. בלי גבולות מפה.
+           הטיה (pitch) כבויה בכוונה כדי שהכוונת תצביע בדיוק על הנקודה שמתחתיה. */
+        minZoom: 2, maxZoom: 22, maxPitch: 0, attributionControl: { compact: true },
+        dragRotate: true, pitchWithRotate: false, touchPitch: false, bearingSnap: 7,
       });
     } catch (e) { setMapErr("המפה לא נטענה במכשיר הזה (חסרה תמיכה בגרפיקה)."); return; }
     mapRef.current = map; window.__hmap = map;
-    map.touchZoomRotate.disableRotation();
-    try { map.keyboard.disableRotation(); } catch (e) { }
+    setBearing(map.getBearing());
+    map.on("rotate", () => { const b = map.getBearing(); setBearing(prev => Math.abs(prev - b) > 0.5 ? b : prev); });
+    map.on("rotateend", () => setBearing(map.getBearing()));
     const geo = new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true, timeout: 15000 }, trackUserLocation: false, showUserLocation: true, fitBoundsOptions: { maxZoom: 18 } });
     map.addControl(geo, "top-left"); geoRef.current = geo;
     geo.on("geolocate", () => setLocating(false));
@@ -2415,7 +2436,7 @@ function HouseMap({ people, stops, tasks }) {
     map.on("click", e => clickRef.current && clickRef.current(e));
     map.on("moveend", () => {
       const c = map.getCenter();
-      try { localStorage.setItem(VIEW_KEY, JSON.stringify({ lat: c.lat, lng: c.lng, zoom: map.getZoom() })); } catch (e) { }
+      try { localStorage.setItem(VIEW_KEY, JSON.stringify({ lat: c.lat, lng: c.lng, zoom: map.getZoom(), bearing: map.getBearing() })); } catch (e) { }
       renderLabels();
     });
     const ro = new ResizeObserver(() => map.resize()); ro.observe(box.current);
@@ -2492,6 +2513,8 @@ function HouseMap({ people, stops, tasks }) {
     if (mine.length) { openHouse(mine[0].properties.key); return; }
     const b = buildingAt(map, p, ll);
     if (b) { const h = houseAtRing(b.ring); if (h) openHouse(h.key); else setSel({ kind: "building", ...b }); return; }
+    if (selRef.current) { setSel(null); return; }
+    if (baseRef.current === "img") return;
     setSel({ kind: "empty", center: { lng: ll[0], lat: ll[1] } });
   };
 
@@ -2551,6 +2574,17 @@ function HouseMap({ people, stops, tasks }) {
     if (b) { const h = houseAtRing(b.ring); if (h) { openHouse(h.key); toast("המבנה הזה כבר משויך"); return; } setSel({ kind: "building", ...b }); assignTo(b); }
     else assignTo({ center: { lat: c.lat, lng: c.lng }, ring: null, addr: addrNear(map, p) });
   };
+  const zoomBy = d => { const m = mapRef.current; if (m) m.easeTo({ zoom: m.getZoom() + d, duration: 250 }); };
+  const resetNorth = () => { const m = mapRef.current; if (m) m.easeTo({ bearing: 0, duration: 300 }); };
+  const ctrls = (extraStyle) => html`<div className="hm-ctrls" style=${extraStyle}>
+    ${Math.abs(bearing) > 0.5 && html`<button className="hm-btn" onClick=${resetNorth} aria-label="החזר צפון למעלה" title="צפון למעלה">
+      <svg viewBox="0 0 24 24" style=${{ transform: `rotate(${-bearing}deg)` }} aria-hidden="true"><path d="M12 3l4 9h-8z" fill="#D8352C"/><path d="M12 21l-4-9h8z" fill="currentColor" opacity=".45"/></svg></button>`}
+    <div className="hm-zoom">
+      <button onClick=${() => zoomBy(1)} aria-label="התקרב"><${Icon} n="plus" w=${2.4}/></button>
+      <button onClick=${() => zoomBy(-1)} aria-label="התרחק"><${Icon} n="minus" w=${2.4}/></button>
+    </div>
+    <button className="hm-btn gps" onClick=${locate} aria-label="המיקום שלי">${locating ? html`<span className="spin"></span>` : html`<${Icon} n="target"/>`}</button>
+  </div>`;
   const locate = () => { const g = geoRef.current; if (!g) return; setLocating(true); try { g.trigger(); } catch (e) { setLocating(false); } setTimeout(() => setLocating(false), 16000); };
 
   /* ---- חיפוש ורשימה ---- */
@@ -2575,7 +2609,7 @@ function HouseMap({ people, stops, tasks }) {
         <button className="b b-sec b-lg" onClick=${() => { setMode("browse"); setMoveKey(null); }}>ביטול</button>
         <button className="b b-primary b-lg" onClick=${confirmAdd}><${Icon} n="pin"/>שמור כאן</button>
       </div>
-      <button className="hm-gps" onClick=${locate} aria-label="המיקום שלי"><${Icon} n="target"/></button>` : html`
+      ${ctrls(null)}` : html`
       <div className="hm-top">
         <div className="hm-search">
           <${Icon} n="search"/>
@@ -2591,7 +2625,7 @@ function HouseMap({ people, stops, tasks }) {
           <span className="av">${p.lastName[0]}</span><span className="pm"><b>${fullName(p)}</b><small>${p.address || "ללא כתובת"}${p.phone ? " · " + p.phone : ""}</small></span></button>`)}
       </div>`}
       ${!sel && !listOpen && html`
-        <button className="hm-gps" onClick=${locate} aria-label="המיקום שלי">${locating ? html`<span className="spin"></span>` : html`<${Icon} n="target"/>`}</button>
+        ${ctrls(null)}
         <div className="hm-bottom">
           <span className="hm-count num">${houses.length} בתים · ${people.filter(p => p.lat != null).length} משפחות</span>
           <button className="hm-add" onClick=${() => startAdd(null)}><${Icon} n="plus"/>הוסף בית</button>
