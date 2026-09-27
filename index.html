@@ -1376,6 +1376,7 @@ const fullName = p => `${p.firstName} ${p.lastName}`;
 const WEEKDAY = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const dayName = d => { try { const [y, m, dd] = d.split("-"); return WEEKDAY[new Date(+y, +m - 1, +dd).getDay()]; } catch (e) { return ""; } };
 const VILLAGE_CENTER = { lat: 32.7, lng: 35.3 };
+const BUILD_ID = "27.9b · תצלום אוויר מתוקן";
 
 /* ---------- 2. store ----------
    ממשק אחיד: watch(collection, where, cb) / set / update / remove / reset
@@ -2167,9 +2168,22 @@ const ML_JS = "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.
 const RTL_URL = "https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js";
 const VIEW_KEY = "dispatch-houses-view";
 /* תצלום אוויר: Esri World Imagery דרך ArcGIS Location Platform (מפתח API אישי, 2M אריחים בחודש חינם).
-   אריחי 512px, סדר {z}/{y}/{x}. התצלום הוא רק רקע — שום מידע לא נשלח לשירות המפות. */
+   שירות האריחים של World_Imagery (256px, סדר {z}/{y}/{x}) עם token. התצלום הוא רק רקע — שום מידע לא נשלח לשירות. */
 const IMG_KEY = "dispatch-esri-key", BASE_KEY = "dispatch-houses-base";
-const IMG_URL = key => `https://static-map-tiles-api.arcgis.com/arcgis/rest/services/static-basemap-tiles-service/v1/arcgis/imagery/static/tile/{z}/{y}/{x}?token=${encodeURIComponent(key)}`;
+const IMG_URL = key => `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${encodeURIComponent(key)}`;
+/* בדיקה ישירה של אריח אחד, כדי לדעת בוודאות אם המפתח עובד (Esri מחזירה שגיאות מפתח כ-JSON) */
+async function probeImagery(key, lat, lng) {
+  const z = 16, n = 2 ** z, r = lat * Math.PI / 180;
+  const x = Math.floor((lng + 180) / 360 * n), y = Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n);
+  const url = IMG_URL(key).replace("{z}", z).replace("{y}", y).replace("{x}", x);
+  try {
+    const res = await fetch(url); const ct = res.headers.get("content-type") || "";
+    if (res.ok && ct.startsWith("image/")) return { ok: true };
+    let txt = ""; try { txt = (await res.text()).slice(0, 300); } catch (e) { }
+    let msg = ""; try { const j = JSON.parse(txt); msg = j.error ? `${j.error.code || ""} ${j.error.message || ""}` : ""; } catch (e) { }
+    return { ok: false, detail: `HTTP ${res.status}${msg ? " · " + msg.trim() : ""}` };
+  } catch (e) { return { ok: false, detail: String(e && e.message || e) }; }
+}
 const IMG_ATTR = "Powered by Esri · Imagery: Esri, Maxar, Earthstar Geographics";
 const lsGet = k => { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } };
 const lsSet = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { } };
@@ -2179,7 +2193,7 @@ function applyBase(map, base, key) {
   if (map.getSource("esri-img")) map.removeSource("esri-img");
   const img = base === "img" && !!key;
   if (img) {
-    map.addSource("esri-img", { type: "raster", tiles: [IMG_URL(key)], tileSize: 512, maxzoom: 19, attribution: IMG_ATTR });
+    map.addSource("esri-img", { type: "raster", tiles: [IMG_URL(key)], tileSize: 256, maxzoom: 19, attribution: IMG_ATTR });
     const firstLabel = (map.getStyle().layers || []).find(l => l.type === "symbol" && !/^(my-|sel-)/.test(l.id));
     map.addLayer({ id: "esri-img", type: "raster", source: "esri-img", paint: { "raster-fade-duration": 120 } }, firstLabel ? firstLabel.id : "my-fill");
   }
@@ -2187,21 +2201,27 @@ function applyBase(map, base, key) {
 }
 const HOUSE_STATUS = { verified: { label: "מאומת", color: "#2563D9" }, check: { label: "לבדיקה", color: "#D98200" } };
 
+/* בודק אם אפשר להציג מפה אמיתית, ומחזיר גם את הסיבה אם לא — כדי שהמשתמש יידע מה לתקן */
 let REAL_MAP = null;
 async function realMapAvailable() {
-  if (REAL_MAP !== null) return REAL_MAP;
+  if (REAL_MAP && REAL_MAP.ok) return REAL_MAP;
+  if (inClaude()) return (REAL_MAP = { ok: false, why: "claude" });
   try {
-    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 7000);
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 10000);
     const r = await fetch(STYLE_URL, { signal: ctl.signal }); clearTimeout(t);
-    REAL_MAP = r.ok;
-    if (REAL_MAP) {
-      await loadScript(ML_JS);
-      const c = document.createElement("canvas");
-      REAL_MAP = !!(window.maplibregl && (c.getContext("webgl2") || c.getContext("webgl")));
-    }
-  } catch (e) { REAL_MAP = false; }
-  return REAL_MAP;
+    if (!r.ok) return (REAL_MAP = { ok: false, why: "style", detail: "HTTP " + r.status });
+  } catch (e) { return (REAL_MAP = { ok: false, why: "style", detail: String(e && e.message || e) }); }
+  try { await loadScript(ML_JS); } catch (e) { return (REAL_MAP = { ok: false, why: "script" }); }
+  const c = document.createElement("canvas");
+  if (!(window.maplibregl && (c.getContext("webgl2") || c.getContext("webgl")))) return (REAL_MAP = { ok: false, why: "webgl" });
+  return (REAL_MAP = { ok: true });
 }
+const MAP_FAIL = {
+  claude: ["המפה האמיתית ותצלום האוויר עובדים רק בגרסה שמאוחסנת ב-GitHub.", "בתוך קישור Claude אי אפשר לטעון מפות חיצוניות, לכן כאן מוצגת רשימת המאגר עם מפה סכמטית."],
+  style: ["לא הצלחנו להתחבר לשרת המפות (OpenFreeMap).", "בדוק חיבור לאינטרנט ולחץ \"נסה שוב\". אם זה חוזר, שלח צילום מסך של ההודעה."],
+  script: ["לא הצלחנו לטעון את רכיב המפה (MapLibre).", "בדוק חיבור לאינטרנט ולחץ \"נסה שוב\"."],
+  webgl: ["הדפדפן במכשיר הזה לא תומך בגרפיקה שהמפה צריכה (WebGL).", "נסה לפתוח ב-Chrome או ב-Safari מעודכן."],
+};
 
 /* ---- גאומטריה ---- */
 function pointInRing(p, ring) {
@@ -2253,12 +2273,14 @@ const houseShort = h => { const names = [...new Set(h.families.map(f => f.lastNa
 
 /* ---- העמוד: מנסה מפה אמיתית; בתוך Claude (בלי גישה לאריחים) — חוזר למאגר הקודם ---- */
 function HousesPage(props) {
-  const [real, setReal] = useState(REAL_MAP);
-  useEffect(() => { if (real === null) realMapAvailable().then(setReal); }, []);
-  if (real === null) return html`<div className="splash">טוען מפה…</div>`;
-  if (!real) return html`<div className="page" style=${{ padding: "16px" }}>
-    <div className="banner info"><${Icon} n="map"/><span className="grow"><b>המפה האמיתית נטענת רק בגרסה המאוחסנת (GitHub).</b> בתוך קישור Claude אי אפשר לטעון מפות חיצוניות, לכן כאן מוצגת רשימת המאגר עם מפה סכמטית.</span></div>
-    <${PeoplePage} ...${props}/></div>`;
+  const [real, setReal] = useState(REAL_MAP && REAL_MAP.ok ? REAL_MAP : null);
+  const check = () => { setReal(null); REAL_MAP = null; realMapAvailable().then(setReal); };
+  useEffect(() => { if (!real) realMapAvailable().then(setReal); }, []);
+  if (!real) return html`<div className="splash">טוען מפה…</div>`;
+  if (!real.ok) { const [t, s] = MAP_FAIL[real.why] || MAP_FAIL.style; return html`<div className="page" style=${{ padding: "16px" }}>
+    <div className=${"banner " + (real.why === "claude" ? "info" : "warn")}><${Icon} n=${real.why === "claude" ? "map" : "alert"}/><span className="grow"><b>${t}</b> ${s}${real.detail ? html`<br/><span className="num" style=${{ fontSize: "12px", opacity: .8 }}>${real.detail}</span>` : null}</span>
+      ${real.why !== "claude" && html`<button className="b b-sec b-sm" onClick=${check}>נסה שוב</button>`}</div>
+    <${PeoplePage} ...${props}/></div>`; }
   return html`<${HouseMap} ...${props}/>`;
 }
 
@@ -2288,14 +2310,14 @@ function FamilyForm({ form, setForm, onSave, onDelete, saving, error }) {
   <//>`;
 }
 
-function ImageryKeyModal({ current, onSave, onClose, failed }) {
+function ImageryKeyModal({ current, onSave, onClose, failed, checking }) {
   const [key, setKey] = useState(current || ""), [err, setErr] = useState(null);
   const save = () => { const k = key.trim(); if (k.length < 20) { setErr("המפתח קצר מדי. העתק את כל ה-API key."); return; } onSave(k); };
   const foot = html`<div className="info">המפתח נשמר רק במכשיר הזה</div>
-    <div className="btns"><button className="b b-sec" onClick=${onClose}>ביטול</button><button className="b b-primary" onClick=${save}>שמור והצג תצלום</button></div>`;
+    <div className="btns"><button className="b b-sec" onClick=${onClose}>ביטול</button><button className="b b-primary" disabled=${checking} onClick=${save}>${checking ? "בודק את המפתח…" : "שמור והצג תצלום"}</button></div>`;
   return html`<${Modal} size="sm" title="חיבור תצלומי אוויר" sub="Esri World Imagery" onClose=${onClose} foot=${foot}>
     <div className="form">
-      ${failed && html`<div className="banner warn"><${Icon} n="alert"/><span className="grow">השירות לא החזיר תמונות עם המפתח הנוכחי. בדוק שהעתקת אותו במלואו ושיש לו הרשאת Basemaps.</span></div>`}
+      ${failed && html`<div className="banner warn"><${Icon} n="alert"/><span className="grow">השירות לא החזיר תמונות עם המפתח הזה. בדוק שהעתקת אותו במלואו, שיש לו הרשאת Basemaps, ושאם הגבלת אותו לכתובת אתר — הכתובת של GitHub מופיעה שם.${typeof failed === "string" ? html`<br/><span className="num" dir="ltr" style=${{ fontSize: "12px", opacity: .85 }}>${failed}</span>` : null}</span></div>`}
       <p style=${{ margin: 0, lineHeight: 1.6 }}>התצלום מגיע מ-Esri (ArcGIS). צריך מפתח אישי חינמי, פעם אחת בכל מכשיר. בחינם עד 2 מיליון אריחים בחודש, הרבה יותר ממה שנדרש למיפוי כפר.</p>
       <ol className="steps-list">
         <li>פתח חשבון חינמי ב-<a href="https://location.arcgis.com/" target="_blank" rel="noopener">location.arcgis.com</a></li>
@@ -2329,6 +2351,8 @@ function HouseMap({ people, stops, tasks }) {
   const [keyModal, setKeyModal] = useState(false), [imgFailed, setImgFailed] = useState(false);
   const imgRef = useRef({ ok: false, errs: 0 });
   const setBase = b => { if (b === "img" && !imgKey) { setKeyModal(true); return; } setBaseS(b); lsSet(BASE_KEY, b); };
+  /* מפתח ששמור מגרסה קודמת: בודקים אותו פעם אחת כשעוברים לתצלום */
+  const probedRef = useRef(false);
 
   /* ---- יצירת המפה ---- */
   useEffect(() => {
@@ -2355,7 +2379,7 @@ function HouseMap({ people, stops, tasks }) {
       if (e && e.sourceId === "esri-img") { const s = imgRef.current; s.errs++; if (s.errs === 1) setTimeout(() => { if (imgRef.current === s && !s.ok) setImgFailed(true); }, 2500); return; }
       console.warn("map", e && e.error && e.error.message);
     });
-    map.on("sourcedata", e => { if (e.sourceId === "esri-img" && e.tile) { imgRef.current.ok = true; } });
+    map.on("sourcedata", e => { if (e.sourceId === "esri-img" && e.tile && e.tile.state === "loaded") { imgRef.current.ok = true; } });
     const loadTimer = setTimeout(() => { if (!loaded) setMapErr("המפה לא נטענה. בדוק את החיבור לאינטרנט ונסה שוב."); }, 20000);
 
     const renderLabels = () => {
@@ -2410,9 +2434,20 @@ function HouseMap({ people, stops, tasks }) {
     const map = mapRef.current; if (!ready || !map) return;
     imgRef.current = { ok: false, errs: 0 };
     try { applyBase(map, base, imgKey); } catch (e) { console.warn(e); }
+    if (base === "img" && imgKey && !probedRef.current) {
+      probedRef.current = true;
+      probeAt(imgKey).then(r => { if (!r.ok) setImgFailed(r.detail || true); });
+    }
   }, [ready, base, imgKey]);
   useEffect(() => { if (imgFailed && base === "img") { setBaseS("map"); lsSet(BASE_KEY, "map"); setKeyModal(true); } }, [imgFailed]);
-  const saveKey = k => { lsSet(IMG_KEY, k); setImgKey(k); setKeyModal(false); setImgFailed(false); if (k) { setBaseS("img"); lsSet(BASE_KEY, "img"); } else { setBaseS("map"); lsSet(BASE_KEY, "map"); } };
+  const [checking, setChecking] = useState(false);
+  const probeAt = async k => { const m = mapRef.current; const c = m ? m.getCenter() : VILLAGE_CENTER; return probeImagery(k, c.lat, c.lng); };
+  const saveKey = async k => {
+    if (!k) { lsSet(IMG_KEY, ""); setImgKey(""); setKeyModal(false); setImgFailed(false); setBaseS("map"); lsSet(BASE_KEY, "map"); return; }
+    setChecking(true); const r = await probeAt(k); setChecking(false);
+    if (!r.ok) { setImgFailed(r.detail || true); return; }
+    lsSet(IMG_KEY, k); setImgKey(k); setKeyModal(false); setImgFailed(false); setBaseS("img"); lsSet(BASE_KEY, "img");
+  };
   const baseToggle = html`<div className="seg hm-base" role="group" aria-label="שכבת רקע">
     <button aria-pressed=${base === "map"} onClick=${() => setBase("map")}><${Icon} n="map"/>מפה</button>
     <button aria-pressed=${base === "img"} onClick=${() => setBase("img")}><${Icon} n="photo"/>תצלום אוויר</button>
@@ -2601,7 +2636,7 @@ function HouseMap({ people, stops, tasks }) {
       </div>
     </div>`}
 
-    ${keyModal && html`<${ImageryKeyModal} current=${imgKey} failed=${imgFailed} onSave=${saveKey} onClose=${() => setKeyModal(false)}/>`}
+    ${keyModal && html`<${ImageryKeyModal} current=${imgKey} failed=${imgFailed} checking=${checking} onSave=${saveKey} onClose=${() => { setKeyModal(false); setImgFailed(false); }}/>`}
     ${form && html`<${FamilyForm} form=${form} setForm=${setForm} onSave=${saveForm} onDelete=${!form.isNew ? deleteFamily : null} saving=${saving} error=${formErr}/>`}
   </div>`;
 }
@@ -3207,6 +3242,7 @@ function AdminApp({ onExit }) {
       <div className="sheet" role="dialog" aria-modal="true" aria-label="תפריט">
         <div className="grab"></div><h3>תפריט</h3>
         <span className=${"mode-dot " + (STORE.mode === "local" ? "local" : "")}><i></i>${modeText}</span>
+        <span className="lbl num">גרסה ${BUILD_ID}</span>
         <${ConfirmButton} className="menu-item" label=${resetting ? `משחזר… ${resetting}` : "איפוס נתוני דמה"} confirmLabel="לחץ שוב לאיפוס" icon="refresh" onConfirm=${reset}/>
         <button className="menu-item" onClick=${onExit}><span>החלפת משתמש</span><${Icon} n="users"/></button>
         ${STORE.mode === "cloud" && html`<button className="menu-item" onClick=${logout}><span>התנתק מהחשבון</span><${Icon} n="logout"/></button>`}
@@ -3233,7 +3269,7 @@ function RolePicker({ go }) {
     <span className=${"mode-dot " + (STORE.mode === "local" ? "local" : "")}><i></i>${PICK_MODE_TEXT[STORE.mode]}</span>
     ${!inClaude() && html`<button className="pick-btn" onClick=${() => go("sync")}><span className="pick-ic" style=${{ background: "#15804D" }}><${Icon} n="refresh"/></span>
       <span className="t"><b>סנכרון בין מכשירים</b><span className="s">${STORE.mode === "cloud" ? "מחובר ל-Supabase" : "חיבור ל-Supabase כדי לעבוד מהמחשב ומהטלפון"}</span></span><span className="chev"><${Icon} n="next"/></span></button>`}
-    <p className="pick-note">כל השמות, הכתובות והטלפונים הם נתוני דמה.</p>
+    <p className="pick-note">כל השמות, הכתובות והטלפונים הם נתוני דמה. <span className="num">גרסה ${BUILD_ID}</span></p>
   </div></div>`;
 }
 
