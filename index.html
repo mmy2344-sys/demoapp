@@ -1,5 +1,15 @@
 <!doctype html>
 <html lang="he" dir="rtl">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = 'https://okqqjhwwovdtwkpxdfmy.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_6BmGMzoZb_eBuFZBj4uLOA_HqLbEN7l';
+
+const supabaseClient = supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+</script>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
