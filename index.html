@@ -1,15 +1,5 @@
 <!doctype html>
 <html lang="he" dir="rtl">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-const SUPABASE_URL = 'https://okqqjhwwovdtwkpxdfmy.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_6BmGMzoZb_eBuFZBj4uLOA_HqLbEN7l';
-
-const supabaseClient = supabase.createClient(
-SUPABASE_URL,
-SUPABASE_KEY
-);
-</script>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -1398,7 +1388,7 @@ const fullName = p => `${p.firstName} ${p.lastName}`;
 const WEEKDAY = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const dayName = d => { try { const [y, m, dd] = d.split("-"); return WEEKDAY[new Date(+y, +m - 1, +dd).getDay()]; } catch (e) { return ""; } };
 const VILLAGE_CENTER = { lat: 32.7, lng: 35.3 };
-const BUILD_ID = "27.9c · שליטה מלאה במפה";
+const BUILD_ID = "28.9 · העלאה למאגר";
 
 /* ---------- 2. store ----------
    ממשק אחיד: watch(collection, where, cb) / set / update / remove / reset
@@ -1531,6 +1521,29 @@ function createCloudStore(sb) {
     },
   };
   return store;
+}
+
+/* נתונים שנשמרו בדפדפן (מצב מקומי) — כדי להעלות אותם למאגר בענן אחרי החיבור */
+const LOCAL_KEY = "dispatch-demo-v1";
+function localSnapshot() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LOCAL_KEY)); if (!s || !s.people) return null;
+    const seedIds = new Set(SEED.people.map(p => p.id));
+    const people = Object.values(s.people || {}), mine = people.filter(p => !seedIds.has(p.id));
+    return { state: s, people: people.length, mine: mine.length, tasks: Object.keys(s.tasks || {}).length };
+  } catch (e) { return null; }
+}
+async function importToCloud(sb, state, onP) {
+  const rows = []; COLLS.forEach(c => Object.values(state[c] || {}).forEach(d => rows.push([c, d])));
+  let done = 0;
+  for (const c of COLLS) {
+    const list = rows.filter(r => r[0] === c).map(([, d]) => { const { id, ...body } = d; return { id, data: body, updated_at: new Date().toISOString() }; });
+    for (let i = 0; i < list.length; i += 200) {
+      const { error } = await sb.from(c).upsert(list.slice(i, i + 200)); if (error) throw error;
+      done += Math.min(200, list.length - i); onP && onP(done, rows.length);
+    }
+  }
+  return rows.length;
 }
 
 let STORE = null;
@@ -3247,13 +3260,24 @@ function AdminApp({ onExit }) {
   const mainRef = useRef(null);
   const go = r => { setRoute(r); mainRef.current && mainRef.current.scrollTo({ top: 0 }); };
   const loaded = people && tasks && stops && couriers;
+  const snap = useMemo(() => STORE.mode === "cloud" ? localSnapshot() : null, []);
+  const [importing, setImporting] = useState(null);
+  const importLocal = async () => {
+    setMenu(false); setImporting("0");
+    try { const n = await importToCloud(CLOUD.client, snap.state, (d, t) => setImporting(`${d}/${t}`)); toast(`הועלו ${n} רשומות מהמכשיר הזה למאגר`); }
+    catch (e) { console.error(e); toast("ההעלאה לא הושלמה: " + (e.message || "שגיאה"), "error"); }
+    setImporting(null);
+  };
   const reset = async () => { setMenu(false); setResetting("0"); try { await STORE.reset((d, t) => setResetting(`${d}/${t}`)); toast("נתוני הדמה שוחזרו"); go({ page: "dash" }); } catch (e) { toast("האיפוס לא הושלם. נסה שוב.", "error"); } setResetting(null); };
   const task = route.page === "task" && tasks ? tasks.find(t => t.id === route.id) : null;
   let body;
   if (!loaded) body = html`<div className="empty-note">טוען נתונים…</div>`;
   else if (!people.length && !tasks.length) body = html`<div className="page"><section className="panel"><div className="empty-note stack" style=${{ alignItems: "center" }}>
-      <b style=${{ fontSize: "18px", color: "var(--ink)" }}>המאגר ריק</b><span>אפשר לטעון את נתוני הדמה: כפר לדוגמה, 46 אנשים, 3 שליחים ושתי משימות.</span>
-      <button className="b b-primary" onClick=${reset} disabled=${!!resetting}>${resetting ? `טוען… ${resetting}` : "טען נתוני דמה"}</button></div></section></div>`;
+      <b style=${{ fontSize: "18px", color: "var(--ink)" }}>המאגר ריק</b>
+      ${snap && snap.people ? html`<span>בדפדפן הזה שמורים ${snap.people} משפחות ו-${snap.tasks} משימות מהעבודה במצב מקומי. אפשר להעלות אותם למאגר, ואז הם יופיעו בכל מכשיר.</span>
+        <button className="b b-primary b-lg" onClick=${importLocal} disabled=${!!importing}>${importing ? `מעלה… ${importing}` : "העלה את הנתונים מהמכשיר הזה"}</button>
+        <span className="lbl">או</span>` : html`<span>אפשר לטעון את נתוני הדמה: כפר לדוגמה, 46 אנשים, 3 שליחים ושתי משימות.</span>`}
+      <button className=${"b " + (snap && snap.people ? "b-sec" : "b-primary")} onClick=${reset} disabled=${!!resetting || !!importing}>${resetting ? `טוען… ${resetting}` : "טען נתוני דמה"}</button></div></section></div>`;
   else if (route.page === "people") body = html`<${HousesPage} people=${people} stops=${stops} tasks=${tasks} mobile=${mobile}/>`;
   else if (route.page === "task" && task) body = html`<${TaskPage} key=${task.id} task=${task} stops=${stops.filter(s => s.taskId === task.id)} people=${people} couriers=${couriers} initialTab=${route.tab} mobile=${mobile} onBack=${() => go({ page: "dash" })}/>`;
   else body = html`<${Dashboard} tasks=${tasks} stops=${stops} couriers=${couriers} go=${go} onNew=${() => setNewOpen(true)} mobile=${mobile}/>`;
@@ -3289,6 +3313,7 @@ function AdminApp({ onExit }) {
         <span className="lbl num">גרסה ${BUILD_ID}</span>
         <${ConfirmButton} className="menu-item" label=${resetting ? `משחזר… ${resetting}` : "איפוס נתוני דמה"} confirmLabel="לחץ שוב לאיפוס" icon="refresh" onConfirm=${reset}/>
         <button className="menu-item" onClick=${onExit}><span>החלפת משתמש</span><${Icon} n="users"/></button>
+        ${snap && snap.people > 0 && html`<${ConfirmButton} className="menu-item" icon="upload" label=${importing ? `מעלה… ${importing}` : `העלה נתונים מהמכשיר הזה למאגר (${snap.people} משפחות)`} confirmLabel="לחץ שוב להעלאה. רשומות עם אותו מזהה יוחלפו." onConfirm=${importLocal}/>`}
         ${STORE.mode === "cloud" && html`<button className="menu-item" onClick=${logout}><span>התנתק מהחשבון</span><${Icon} n="logout"/></button>`}
         <button className="sheet-ghost" onClick=${() => setMenu(false)}>סגור</button>
       </div></div>`}
