@@ -1346,6 +1346,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14px}
 .hm-zoom svg{width:22px;height:22px}
 .hmap .maplibregl-canvas{touch-action:none}
 .hm-top,.hm-base,.hm-ctrls,.hm-bottom,.hm-bar{touch-action:manipulation}
+.hs-fam-act{display:flex;gap:6px;flex:none}
+.menu-item.danger,.nav-btn.danger{color:var(--fail)}
+.menu-item.armed,.nav-btn.armed{background:var(--fail);color:#fff}
+.menu-item > svg:first-child{order:2}
 
 </style>
 <div id="root" dir="rtl" lang="he"></div>
@@ -1388,7 +1392,7 @@ const fullName = p => `${p.firstName} ${p.lastName}`;
 const WEEKDAY = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const dayName = d => { try { const [y, m, dd] = d.split("-"); return WEEKDAY[new Date(+y, +m - 1, +dd).getDay()]; } catch (e) { return ""; } };
 const VILLAGE_CENTER = { lat: 32.7, lng: 35.3 };
-const BUILD_ID = "28.9 · העלאה למאגר";
+const BUILD_ID = "29.9 · מחיקת נתונים";
 
 /* ---------- 2. store ----------
    ממשק אחיד: watch(collection, where, cb) / set / update / remove / reset
@@ -1505,8 +1509,12 @@ function createCloudStore(sb) {
     },
     async remove(c, id) {
       applyLocal(c, id, () => null);
-      const { error } = await sb.from(c).delete().eq("id", id);
+      const { data, error } = await sb.from(c).delete().eq("id", id).select("id");
       if (error) throw error;
+      if (!data || !data.length) {
+        const { data: still } = await sb.from(c).select("id").eq("id", id);
+        if (still && still.length) throw { message: "המאגר לא אישר את המחיקה (בדוק שהאימייל שלך ברשימת המורשים)" };
+      }
     },
     async reset(onP) {
       let done = 0; const total = COLLS.length * 2;
@@ -1545,6 +1553,14 @@ async function importToCloud(sb, state, onP) {
   }
   return rows.length;
 }
+
+/* פעולות נתונים בטוחות: טעינת דמה רק מוסיפה; מחיקה מוחקת רק את מה שנבחר */
+const SEED_IDS = { people: new Set(SEED.people.map(d => d.id)), tasks: new Set(SEED.tasks.map(d => d.id)), stops: new Set(SEED.stops.map(d => d.id)) };
+async function loadDemoData(onP) {
+  const jobs = []; ["couriers", "people", "tasks", "stops"].forEach(c => SEED[c].forEach(d => jobs.push(() => STORE.set(c, d.id, d))));
+  await runAll(jobs, 4, onP);
+}
+async function deleteDocs(list, onP) { await runAll(list.map(([c, id]) => () => STORE.remove(c, id)), 4, onP); }
 
 let STORE = null;
 /* סדר עדיפויות: מסד משותף של Claude (בתוך קישור Claude) → Supabase אם הוגדר → מקומי בדפדפן */
@@ -2671,7 +2687,8 @@ function HouseMap({ people, stops, tasks }) {
           <div className="m"><b>${fullName(f)}</b>
             ${f.phone && html`<span className="num">${f.phone}</span>`}
             ${f.notes && html`<span>${f.notes}</span>`}</div>
-          <button className="b b-sec b-sm" onClick=${() => editFamily(f)}>ערוך</button></div>`)}</div>
+          <div className="hs-fam-act"><button className="b b-sec b-sm" onClick=${() => editFamily(f)}>ערוך</button>
+            <${ConfirmButton} className="b b-danger b-sm" label="מחק" confirmLabel="בטוח?" onConfirm=${async () => { await Repo.deletePerson(f.id); toast(`משפחת ${f.lastName} נמחקה`); }}/></div></div>`)}</div>
         <div className="seg full" role="group" aria-label="סטטוס הבית">
           ${Object.entries(HOUSE_STATUS).map(([k, v]) => html`<button key=${k} aria-pressed=${selHouse.status === k} onClick=${() => selHouse.status !== k && setStatus(selHouse, k)}><i className="dot" style=${{ background: v.color }}></i>${v.label}</button>`)}
         </div>
@@ -3268,7 +3285,16 @@ function AdminApp({ onExit }) {
     catch (e) { console.error(e); toast("ההעלאה לא הושלמה: " + (e.message || "שגיאה"), "error"); }
     setImporting(null);
   };
-  const reset = async () => { setMenu(false); setResetting("0"); try { await STORE.reset((d, t) => setResetting(`${d}/${t}`)); toast("נתוני הדמה שוחזרו"); go({ page: "dash" }); } catch (e) { toast("האיפוס לא הושלם. נסה שוב.", "error"); } setResetting(null); };
+  const reset = async () => { setMenu(false); setResetting("0"); try { await loadDemoData((d, t) => setResetting(`${d}/${t}`)); toast("נתוני הדמה נטענו"); go({ page: "dash" }); } catch (e) { toast("הטעינה לא הושלמה. נסה שוב.", "error"); } setResetting(null); };
+  const demoList = loaded ? [...people.filter(p => SEED_IDS.people.has(p.id)).map(p => ["people", p.id]), ...stops.filter(s => SEED_IDS.stops.has(s.id)).map(s => ["stops", s.id]), ...tasks.filter(t => SEED_IDS.tasks.has(t.id)).map(t => ["tasks", t.id])] : [];
+  const allList = loaded ? [...people.map(p => ["people", p.id]), ...stops.map(s => ["stops", s.id]), ...tasks.map(t => ["tasks", t.id])] : [];
+  const demoFamilies = loaded ? people.filter(p => SEED_IDS.people.has(p.id)).length : 0;
+  const wipe = async (list, msg) => { setMenu(false); setResetting("0"); try { await deleteDocs(list, (d, t) => setResetting(`${d}/${t}`)); toast(msg); go({ page: "dash" }); } catch (e) { toast("המחיקה לא הושלמה: " + (e.message || "שגיאה"), "error"); } setResetting(null); };
+  const dataActions = cls => html`
+    ${demoFamilies > 0
+      ? html`<${ConfirmButton} className=${cls} icon="trash" label=${resetting ? `מוחק… ${resetting}` : `מחק את נתוני הדמה (${demoFamilies} משפחות)`} confirmLabel="לחץ שוב: רק נתוני הדמה יימחקו" onConfirm=${() => wipe(demoList, "נתוני הדמה נמחקו. הנתונים שלך נשארו.")}/>`
+      : html`<button className=${cls} onClick=${reset} disabled=${!!resetting}><${Icon} n="refresh"/><span>${resetting ? `טוען… ${resetting}` : "טען נתוני דמה"}</span></button>`}
+    ${allList.length > 0 && html`<${ConfirmButton} className=${cls + " danger"} icon="trash" label=${`מחק את כל המשפחות והמשימות (${people.length})`} confirmLabel=${`לחץ שוב: ${allList.length} רשומות יימחקו לצמיתות`} onConfirm=${() => wipe(allList, "כל המשפחות והמשימות נמחקו")}/>`}`;
   const task = route.page === "task" && tasks ? tasks.find(t => t.id === route.id) : null;
   let body;
   if (!loaded) body = html`<div className="empty-note">טוען נתונים…</div>`;
@@ -3291,7 +3317,7 @@ function AdminApp({ onExit }) {
       <button className="nav-btn" aria-current=${cur("people")} onClick=${() => go({ page: "people" })}><${Icon} n="map"/>מפת בתים</button>
       <div className="side-foot">
         <span className=${"mode-dot " + (STORE.mode === "local" ? "local" : "")}><i></i>${modeText}</span>
-        <${ConfirmButton} className="nav-btn" label=${resetting ? `משחזר… ${resetting}` : "איפוס נתוני דמה"} confirmLabel="לחץ שוב לאיפוס" icon="refresh" onConfirm=${reset}/>
+        ${loaded && dataActions("nav-btn")}
         <button className="nav-btn" onClick=${onExit}><${Icon} n="users"/>החלפת משתמש</button>
         ${STORE.mode === "cloud" && html`<button className="nav-btn" onClick=${logout}><${Icon} n="logout"/>התנתק</button>`}
       </div>
@@ -3311,7 +3337,7 @@ function AdminApp({ onExit }) {
         <div className="grab"></div><h3>תפריט</h3>
         <span className=${"mode-dot " + (STORE.mode === "local" ? "local" : "")}><i></i>${modeText}</span>
         <span className="lbl num">גרסה ${BUILD_ID}</span>
-        <${ConfirmButton} className="menu-item" label=${resetting ? `משחזר… ${resetting}` : "איפוס נתוני דמה"} confirmLabel="לחץ שוב לאיפוס" icon="refresh" onConfirm=${reset}/>
+        ${loaded && dataActions("menu-item")}
         <button className="menu-item" onClick=${onExit}><span>החלפת משתמש</span><${Icon} n="users"/></button>
         ${snap && snap.people > 0 && html`<${ConfirmButton} className="menu-item" icon="upload" label=${importing ? `מעלה… ${importing}` : `העלה נתונים מהמכשיר הזה למאגר (${snap.people} משפחות)`} confirmLabel="לחץ שוב להעלאה. רשומות עם אותו מזהה יוחלפו." onConfirm=${importLocal}/>`}
         ${STORE.mode === "cloud" && html`<button className="menu-item" onClick=${logout}><span>התנתק מהחשבון</span><${Icon} n="logout"/></button>`}
